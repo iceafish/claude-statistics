@@ -200,6 +200,15 @@ struct SettingsView: View {
                     Spacer()
                     Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–")
                         .foregroundStyle(.secondary)
+                    if let newVersion = updaterService.availableVersion {
+                        Text("v\(newVersion)")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.red)
+                            .cornerRadius(4)
+                    }
                 }
                 .font(.system(size: 12))
 
@@ -207,6 +216,11 @@ struct SettingsView: View {
                     HStack {
                         Label("settings.checkForUpdates", systemImage: "arrow.triangle.2.circlepath")
                         Spacer()
+                        if updaterService.hasUpdate {
+                            Circle()
+                                .fill(.red)
+                                .frame(width: 8, height: 8)
+                        }
                     }
                     .font(.system(size: 12))
                 }

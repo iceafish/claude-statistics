@@ -59,7 +59,12 @@ struct MenuBarView: View {
             // Tab bar
             HStack(spacing: 0) {
                 ForEach(tabOrder) { tab in
-                    TabButton(title: tab.localizedName, icon: tab.icon, isSelected: selectedTab == tab) {
+                    TabButton(
+                        title: tab.localizedName,
+                        icon: tab.icon,
+                        isSelected: selectedTab == tab,
+                        showBadge: tab == .settings && updaterService.hasUpdate
+                    ) {
                         selectedTab = tab
                     }
                 }
@@ -146,14 +151,23 @@ struct TabButton: View {
     let title: LocalizedStringKey
     let icon: String
     let isSelected: Bool
+    var showBadge: Bool = false
     let action: () -> Void
     @State private var isHovered = false
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 2) {
-                Image(systemName: icon)
-                    .font(.system(size: 14))
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: icon)
+                        .font(.system(size: 14))
+                    if showBadge {
+                        Circle()
+                            .fill(.red)
+                            .frame(width: 6, height: 6)
+                            .offset(x: 3, y: -2)
+                    }
+                }
                 Text(title)
                     .font(.system(size: 10))
             }

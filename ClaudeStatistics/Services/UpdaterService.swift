@@ -3,7 +3,6 @@ import SwiftUI
 import Sparkle
 
 /// Handles Sparkle gentle reminders for LSUIElement (background) apps.
-/// When Sparkle finds an update during auto-check, this brings the app to front.
 final class GentleReminderDelegate: NSObject, SPUStandardUserDriverDelegate {
     var supportsGentleScheduledUpdateReminders: Bool { true }
 
@@ -17,23 +16,47 @@ final class GentleReminderDelegate: NSObject, SPUStandardUserDriverDelegate {
     }
 }
 
+/// Monitors appcast for available updates and exposes state to UI.
+final class UpdateCheckDelegate: NSObject, SPUUpdaterDelegate {
+    weak var service: UpdaterService?
+
+    nonisolated func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        let version = item.displayVersionString ?? item.versionString
+        DispatchQueue.main.async { [weak self] in
+            self?.service?.availableVersion = version
+        }
+    }
+
+    nonisolated func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: any Error) {
+        DispatchQueue.main.async { [weak self] in
+            self?.service?.availableVersion = nil
+        }
+    }
+}
+
 @MainActor
 final class UpdaterService: ObservableObject {
     let controller: SPUStandardUpdaterController
-    // Must be stored as a strong reference so Sparkle can use it
     private static let _gentleDelegate = GentleReminderDelegate()
+    private let _updaterDelegate = UpdateCheckDelegate()
 
     @Published var canCheckForUpdates = false
+    @Published var availableVersion: String?
+
+    var hasUpdate: Bool { availableVersion != nil }
 
     init() {
         controller = SPUStandardUpdaterController(
-            startingUpdater: true,
-            updaterDelegate: nil,
+            startingUpdater: false,
+            updaterDelegate: _updaterDelegate,
             userDriverDelegate: UpdaterService._gentleDelegate
         )
+        _updaterDelegate.service = self
 
         controller.updater.publisher(for: \.canCheckForUpdates)
             .assign(to: &$canCheckForUpdates)
+
+        try? controller.updater.start()
     }
 
     func checkForUpdates() {
