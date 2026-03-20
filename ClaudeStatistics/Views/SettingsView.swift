@@ -9,6 +9,8 @@ struct SettingsView: View {
     @AppStorage("preferredTerminal") private var preferredTerminal = "Auto"
     @AppStorage("appLanguage") private var appLanguage = "auto"
     @AppStorage("fontScale") private var fontScale = 1.0
+    @AppStorage("customInterval") private var customInterval = false
+    @State private var customMinutes = ""
     @State private var showPricing = false
     @State private var hasToken: Bool?
 
@@ -52,15 +54,48 @@ struct SettingsView: View {
                     }
 
                 if autoRefreshEnabled {
-                    Picker("settings.interval", selection: $refreshInterval) {
-                        Text("5min").tag(300.0)
-                        Text("10min").tag(600.0)
-                        Text("30min").tag(1800.0)
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: refreshInterval) { _, newValue in
-                        usageViewModel.autoRefreshInterval = newValue
-                        usageViewModel.startAutoRefresh()
+                    HStack(spacing: 8) {
+                        ForEach([5, 10, 30], id: \.self) { min in
+                            Button {
+                                customInterval = false
+                                refreshInterval = Double(min * 60)
+                                usageViewModel.autoRefreshInterval = refreshInterval
+                                usageViewModel.startAutoRefresh()
+                            } label: {
+                                Text("\(min)min")
+                                    .font(.system(size: 11))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(!customInterval && refreshInterval == Double(min * 60) ? Color.blue : Color.gray.opacity(0.15))
+                                    .foregroundStyle(!customInterval && refreshInterval == Double(min * 60) ? .white : .primary)
+                                    .cornerRadius(4)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        HStack(spacing: 3) {
+                            TextField("", text: $customMinutes)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 11, design: .monospaced))
+                                .frame(width: 40)
+                                .onAppear {
+                                    if customInterval {
+                                        customMinutes = String(Int(refreshInterval / 60))
+                                    }
+                                }
+                                .onSubmit {
+                                    applyCustomInterval()
+                                }
+                                .onChange(of: customMinutes) { _, newValue in
+                                    if !newValue.isEmpty {
+                                        customInterval = true
+                                        applyCustomInterval()
+                                    }
+                                }
+                            Text("min")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -199,6 +234,18 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func applyCustomInterval() {
+        guard let minutes = Int(customMinutes), minutes >= 1 else {
+            customInterval = false
+            customMinutes = ""
+            return
+        }
+        customInterval = true
+        refreshInterval = Double(minutes * 60)
+        usageViewModel.autoRefreshInterval = refreshInterval
+        usageViewModel.startAutoRefresh()
     }
 
 }

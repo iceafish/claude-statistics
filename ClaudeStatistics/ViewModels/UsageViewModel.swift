@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-import Combine
 
 @MainActor
 final class UsageViewModel: ObservableObject {
@@ -10,11 +9,11 @@ final class UsageViewModel: ObservableObject {
     @Published var lastFetchedAt: Date?
     @Published var autoRefreshInterval: TimeInterval = 300
 
-    private var refreshTimer: Timer?
+    private var refreshTask: Task<Void, Never>?
+    private var activeInterval: TimeInterval = 0
 
     init() {
         loadCache()
-        // Restore auto-refresh from persisted setting
         let enabled = UserDefaults.standard.bool(forKey: "autoRefreshEnabled")
         let interval = UserDefaults.standard.double(forKey: "refreshInterval")
         if enabled {
@@ -86,26 +85,25 @@ final class UsageViewModel: ObservableObject {
     }
 
     func startAutoRefresh() {
-        // Skip if timer already running with the same interval
-        if let existing = refreshTimer, existing.isValid,
-           existing.timeInterval == autoRefreshInterval {
+        let interval = autoRefreshInterval
+        // Don't restart if already running with the same interval
+        if refreshTask != nil && activeInterval == interval {
             return
         }
         stopAutoRefresh()
-        let interval = autoRefreshInterval
-        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor in
+        activeInterval = interval
+        refreshTask = Task.detached { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(interval))
+                guard !Task.isCancelled, let self else { break }
                 await self.refresh()
             }
         }
-        RunLoop.main.add(timer, forMode: .common)
-        refreshTimer = timer
     }
 
     func stopAutoRefresh() {
-        refreshTimer?.invalidate()
-        refreshTimer = nil
+        refreshTask?.cancel()
+        refreshTask = nil
     }
 
     // MARK: - Computed display properties

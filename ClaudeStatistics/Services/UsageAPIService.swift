@@ -62,7 +62,13 @@ final class UsageAPIService {
         retryAfter = nil
 
         let decoder = JSONDecoder()
-        let usageData = try decoder.decode(UsageAPIResponse.self, from: data).asUsageData
+        let usageData: UsageData
+        do {
+            usageData = try decoder.decode(UsageAPIResponse.self, from: data).asUsageData
+        } catch {
+            let raw = String(data: data, encoding: .utf8) ?? "<binary>"
+            throw UsageError.decodingFailed(detail: error.localizedDescription, raw: raw)
+        }
 
         // Cache the result
         saveToCache(usageData)
@@ -143,6 +149,7 @@ enum UsageError: LocalizedError {
     case invalidResponse
     case httpError(statusCode: Int)
     case rateLimited(retryInSeconds: Int)
+    case decodingFailed(detail: String, raw: String)
 
     var errorDescription: String? {
         switch self {
@@ -151,6 +158,7 @@ enum UsageError: LocalizedError {
         case .invalidResponse: return "Invalid response"
         case .httpError(let code): return "HTTP error: \(code)"
         case .rateLimited(let seconds): return "Rate limited, retry in \(seconds)s"
+        case .decodingFailed(let detail, _): return "Decoding error: \(detail)"
         }
     }
 }

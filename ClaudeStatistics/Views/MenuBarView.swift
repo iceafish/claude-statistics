@@ -116,9 +116,6 @@ struct MenuBarView: View {
             usageViewModel.loadCache()
             store.start()
             store.popoverDidOpen()
-            if UserDefaults.standard.bool(forKey: "autoRefreshEnabled") {
-                usageViewModel.startAutoRefresh()
-            }
         }
         .onDisappear {
             store.popoverDidClose()
