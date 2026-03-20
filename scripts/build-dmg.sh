@@ -26,11 +26,10 @@ xcodebuild -project ClaudeStatistics.xcodeproj \
   -configuration Release \
   -derivedDataPath "${BUILD_DIR}" \
   clean build \
-  CONFIGURATION_BUILD_DIR="${PWD}/${BUILD_DIR}" \
   MARKETING_VERSION="${VERSION}" \
   2>&1 | tail -5
 
-APP_PATH="${BUILD_DIR}/${APP_NAME}.app"
+APP_PATH="${BUILD_DIR}/Build/Products/Release/${APP_NAME}.app"
 
 if [ ! -d "${APP_PATH}" ]; then
   echo "ERROR: Build failed, ${APP_PATH} not found"
@@ -59,7 +58,7 @@ hdiutil create \
 
 rm -rf "${DMG_DIR}"
 
-# Clean up intermediate .app to avoid duplicate registrations in LaunchServices
+# Clean up intermediate build to avoid duplicate app registrations
 rm -rf "${BUILD_DIR}"
 
 DMG_SIZE=$(du -h "${DMG_OUTPUT}" | cut -f1 | xargs)
