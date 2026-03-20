@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct StatisticsView: View {
-    @ObservedObject var viewModel: StatisticsViewModel
     @ObservedObject var store: SessionDataStore
     @State private var selectedPeriodDetail: PeriodStats?
 

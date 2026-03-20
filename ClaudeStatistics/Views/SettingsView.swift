@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var usageViewModel: UsageViewModel
+    @ObservedObject var profileViewModel: ProfileViewModel
     @Binding var tabOrder: [AppTab]
     @ObservedObject var updaterService: UpdaterService
     @AppStorage("autoRefreshEnabled") private var autoRefreshEnabled = false
@@ -231,9 +232,9 @@ struct SettingsView: View {
                     .foregroundStyle(.blue)
             }
 
-            if usageViewModel.profileLoading {
+            if profileViewModel.profileLoading {
                 ProgressView().scaleEffect(0.5)
-            } else if let profile = usageViewModel.userProfile {
+            } else if let profile = profileViewModel.userProfile {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(profile.account?.displayName ?? "–")
                         .font(.system(size: 13, weight: .medium))
@@ -310,7 +311,7 @@ struct SettingsView: View {
     }
 
     private var avatarInitial: String {
-        if let name = usageViewModel.userProfile?.account?.displayName, let first = name.first {
+        if let name = profileViewModel.userProfile?.account?.displayName, let first = name.first {
             return String(first).uppercased()
         }
         return "?"

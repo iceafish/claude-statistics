@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0A1B2C3D4E5F6A7B8C9D0E1F /* AutoRefreshCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6A7B8C9D0E1F2 /* AutoRefreshCoordinator.swift */; };
+		1A2B3C4D5E6F7A8B9C0D1E2F /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C2D3E4F5A6B7C8D9E0F1A2 /* ProfileViewModel.swift */; };
 		1D84A21259B5673F6ABDFCC1 /* Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F9BBB23CB057720EA99A7B /* Session.swift */; };
 		3AD8ED72F8D42B9DB0614F77 /* UpdaterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7AD5E89B648F5018E34233A /* UpdaterService.swift */; };
 		3F7B6FCC8858E6DEECB776A0 /* SessionDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D5BA98DFF322E54A1E5B1F2 /* SessionDataStore.swift */; };
@@ -24,7 +26,6 @@
 		AC5082113B4136915E426299 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 2710C957B5C3CF8708B02CC6 /* Localizable.strings */; };
 		AD026F88B93877B8DC87E042 /* CredentialService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42069DDFAB4457A16AF6492F /* CredentialService.swift */; };
 		C48BDE19A5E58235BAB61F51 /* UsageViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5306E49F4AF08425229312F0 /* UsageViewModel.swift */; };
-		C6475894D627695F03721B9E /* StatisticsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FD22C7501CE3D23277710E5 /* StatisticsViewModel.swift */; };
 		D06D7B513EFFD60742C93431 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B5C4223D247CA4D681A19D53 /* Assets.xcassets */; };
 		D64171EFA61052FC0A315681 /* SessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58B71B5593D63536AB462D70 /* SessionViewModel.swift */; };
 		E04B621B671D090DB9155348 /* LanguageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1519B833F38D44123500B58 /* LanguageManager.swift */; };
@@ -40,6 +41,8 @@
 
 /* Begin PBXFileReference section */
 		011E707E6F2F284A99ECF925 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* AutoRefreshCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoRefreshCoordinator.swift; sourceTree = "<group>"; };
+		B1C2D3E4F5A6B7C8D9E0F1A2 /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
 		054E2C5CD2CBA7B14AFF897A /* PricingFetchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PricingFetchService.swift; sourceTree = "<group>"; };
 		15FB669CCF4C2F10D4550624 /* TimeFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeFormatter.swift; sourceTree = "<group>"; };
 		1A4A95A6629B2D5258EA882D /* SessionScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionScanner.swift; sourceTree = "<group>"; };
@@ -57,7 +60,6 @@
 		609271D9D2750E6DBBCFFAC5 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		68083922F93D555879FAD90B /* ClaudeStatisticsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeStatisticsApp.swift; sourceTree = "<group>"; };
 		6E1B839DD5F15A6A55AE3727 /* StatisticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatisticsView.swift; sourceTree = "<group>"; };
-		6FD22C7501CE3D23277710E5 /* StatisticsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatisticsViewModel.swift; sourceTree = "<group>"; };
 		77339C38F26D780CFD6D03EB /* ClaudeStatistics.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeStatistics.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7D3BC22C81208BA2B853C240 /* UsageAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageAPIService.swift; sourceTree = "<group>"; };
 		A776ADBF033757E89353F9E2 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
@@ -96,6 +98,7 @@
 		23BF9034C5BAB628D0B18D2A /* Utilities */ = {
 			isa = PBXGroup;
 			children = (
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* AutoRefreshCoordinator.swift */,
 				D1519B833F38D44123500B58 /* LanguageManager.swift */,
 				FA42F7AC4BB41556CDC7EFCC /* TerminalLauncher.swift */,
 				15FB669CCF4C2F10D4550624 /* TimeFormatter.swift */,
@@ -145,8 +148,8 @@
 		630E776A88A7FDCBD895C84A /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				B1C2D3E4F5A6B7C8D9E0F1A2 /* ProfileViewModel.swift */,
 				58B71B5593D63536AB462D70 /* SessionViewModel.swift */,
-				6FD22C7501CE3D23277710E5 /* StatisticsViewModel.swift */,
 				5306E49F4AF08425229312F0 /* UsageViewModel.swift */,
 			);
 			path = ViewModels;
@@ -272,12 +275,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				59FB58B0D4D4298AF8A3A1A6 /* AggregateStats.swift in Sources */,
+				0A1B2C3D4E5F6A7B8C9D0E1F /* AutoRefreshCoordinator.swift in Sources */,
 				FEFC2968DA07D06063D40E24 /* ClaudeStatisticsApp.swift in Sources */,
 				AD026F88B93877B8DC87E042 /* CredentialService.swift in Sources */,
 				FA20F885511C5F92715056F9 /* FSEventsWatcher.swift in Sources */,
 				E04B621B671D090DB9155348 /* LanguageManager.swift in Sources */,
 				F3272760285AF18F519D8E80 /* MenuBarView.swift in Sources */,
 				4809D9A533DA37D1B71D1592 /* PricingFetchService.swift in Sources */,
+				1A2B3C4D5E6F7A8B9C0D1E2F /* ProfileViewModel.swift in Sources */,
 				1D84A21259B5673F6ABDFCC1 /* Session.swift in Sources */,
 				3F7B6FCC8858E6DEECB776A0 /* SessionDataStore.swift in Sources */,
 				E45AD6199CAB1661300675D6 /* SessionDetailView.swift in Sources */,
@@ -286,7 +291,6 @@
 				D64171EFA61052FC0A315681 /* SessionViewModel.swift in Sources */,
 				E26C6870A1E9540BCA9E7045 /* SettingsView.swift in Sources */,
 				686EC93B311494291E5BCE75 /* StatisticsView.swift in Sources */,
-				C6475894D627695F03721B9E /* StatisticsViewModel.swift in Sources */,
 				A795EC97A42092FD1CDDABEB /* StatusLineInstaller.swift in Sources */,
 				7FEDE160B6E6484B272C2078 /* TerminalLauncher.swift in Sources */,
 				861A6FDE8151A6DF1D571793 /* TimeFormatter.swift in Sources */,

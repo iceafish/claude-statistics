@@ -8,14 +8,18 @@ final class UsageViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var lastFetchedAt: Date?
     @Published var autoRefreshInterval: TimeInterval = 300
-    @Published var userProfile: UserProfile?
-    @Published var profileLoading = false
 
-    private var refreshTask: Task<Void, Never>?
-    private var activeInterval: TimeInterval = 0
+    private var autoRefresh: AutoRefreshCoordinator?
 
     init() {
         loadCache()
+
+        // Create coordinator after all stored properties are initialized
+        self.autoRefresh = AutoRefreshCoordinator { [weak self] in
+            guard let self else { return }
+            await self.refresh()
+        }
+
         let enabled = UserDefaults.standard.bool(forKey: "autoRefreshEnabled")
         let interval = UserDefaults.standard.double(forKey: "refreshInterval")
         if enabled {
@@ -25,22 +29,6 @@ final class UsageViewModel: ObservableObject {
             }
             startAutoRefresh()
         }
-        // Load profile once on startup
-        Task { @MainActor in
-            await self.loadProfile()
-        }
-    }
-
-    func loadProfile() async {
-        guard userProfile == nil, !profileLoading else { return }
-        guard CredentialService.shared.getAccessToken() != nil else { return }
-        profileLoading = true
-        do {
-            userProfile = try await UsageAPIService.shared.fetchProfile()
-        } catch {
-            // Silent fail — settings will show token-only fallback
-        }
-        profileLoading = false
     }
 
     func loadCache() {
@@ -103,25 +91,11 @@ final class UsageViewModel: ObservableObject {
     }
 
     func startAutoRefresh() {
-        let interval = autoRefreshInterval
-        // Don't restart if already running with the same interval
-        if refreshTask != nil && activeInterval == interval {
-            return
-        }
-        stopAutoRefresh()
-        activeInterval = interval
-        refreshTask = Task.detached { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(interval))
-                guard !Task.isCancelled, let self else { break }
-                await self.refresh()
-            }
-        }
+        autoRefresh?.start(interval: autoRefreshInterval)
     }
 
     func stopAutoRefresh() {
-        refreshTask?.cancel()
-        refreshTask = nil
+        autoRefresh?.stop()
     }
 
     // MARK: - Computed display properties

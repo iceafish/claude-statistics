@@ -4,9 +4,13 @@ import SwiftUI
 final class AppState: ObservableObject {
     let store = SessionDataStore()
     lazy var sessionViewModel = SessionViewModel(store: store)
-    lazy var statisticsViewModel = StatisticsViewModel(store: store)
     let usageViewModel = UsageViewModel()
+    let profileViewModel = ProfileViewModel()
     let updaterService = UpdaterService()
+
+    init() {
+        store.start()
+    }
 }
 
 struct MenuBarLabel: View {
@@ -43,8 +47,8 @@ struct ClaudeStatisticsApp: App {
         MenuBarExtra {
             MenuBarView(
                 usageViewModel: appState.usageViewModel,
+                profileViewModel: appState.profileViewModel,
                 sessionViewModel: appState.sessionViewModel,
-                statisticsViewModel: appState.statisticsViewModel,
                 store: appState.store,
                 updaterService: appState.updaterService
             )

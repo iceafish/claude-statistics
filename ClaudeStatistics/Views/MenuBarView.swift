@@ -46,8 +46,8 @@ enum AppTab: String, CaseIterable, Identifiable, Codable {
 
 struct MenuBarView: View {
     @ObservedObject var usageViewModel: UsageViewModel
+    @ObservedObject var profileViewModel: ProfileViewModel
     @ObservedObject var sessionViewModel: SessionViewModel
-    @ObservedObject var statisticsViewModel: StatisticsViewModel
     @ObservedObject var store: SessionDataStore
     @ObservedObject var updaterService: UpdaterService
     @State private var selectedTab: AppTab = AppTab.loadOrder().first ?? .sessions
@@ -77,14 +77,14 @@ struct MenuBarView: View {
                     case .sessions:
                         sessionContent
                     case .stats:
-                        StatisticsView(viewModel: statisticsViewModel, store: store)
+                        StatisticsView(store: store)
                     case .usage:
                         ScrollView {
                             UsageView(viewModel: usageViewModel)
                                 .padding(12)
                         }
                     case .settings:
-                        SettingsView(usageViewModel: usageViewModel, tabOrder: $tabOrder, updaterService: updaterService)
+                        SettingsView(usageViewModel: usageViewModel, profileViewModel: profileViewModel, tabOrder: $tabOrder, updaterService: updaterService)
                     }
                 }
                 .frame(width: geo.size.width / fontScale, height: geo.size.height / fontScale, alignment: .topLeading)
@@ -114,7 +114,6 @@ struct MenuBarView: View {
         .frame(width: 480, height: 520)
         .onAppear {
             usageViewModel.loadCache()
-            store.start()
             store.popoverDidOpen()
         }
         .onDisappear {
