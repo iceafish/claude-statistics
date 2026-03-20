@@ -267,7 +267,7 @@ struct PricingManageView: View {
 
     @State private var models: [(id: String, pricing: ModelPricing.Pricing)] = []
     @State private var isFetching = false
-    @State private var fetchMessage: String?
+    @State private var fetchMessage: LocalizedStringKey?
     @State private var fetchIsError = false
     @State private var editingModel: String?
     @State private var editInput = ""
@@ -481,13 +481,13 @@ struct PricingManageView: View {
                 await MainActor.run {
                     ModelPricing.shared.updateModels(fetched)
                     loadModels()
-                    fetchMessage = String(localized: "pricing.updated \(fetched.count)")
+                    fetchMessage = "pricing.updated \(fetched.count)"
                     fetchIsError = false
                     isFetching = false
                 }
             } catch {
                 await MainActor.run {
-                    fetchMessage = error.localizedDescription
+                    fetchMessage = LocalizedStringKey(error.localizedDescription)
                     fetchIsError = true
                     isFetching = false
                 }
@@ -518,7 +518,7 @@ struct PricingManageView: View {
 struct StatusLineSection: View {
     @State private var isInstalled = StatusLineInstaller.isInstalled
     @State private var hasBackup = StatusLineInstaller.hasBackup
-    @State private var message: String?
+    @State private var message: LocalizedStringKey?
     @State private var isError = false
 
     var body: some View {
@@ -573,10 +573,10 @@ struct StatusLineSection: View {
             try StatusLineInstaller.install()
             isInstalled = true
             hasBackup = StatusLineInstaller.hasBackup
-            message = String(localized: "statusLine.installSuccess")
+            message = "statusLine.installSuccess"
             isError = false
         } catch {
-            message = error.localizedDescription
+            message = LocalizedStringKey(error.localizedDescription)
             isError = true
         }
     }
@@ -586,10 +586,10 @@ struct StatusLineSection: View {
             try StatusLineInstaller.restore()
             isInstalled = false
             hasBackup = false
-            message = String(localized: "statusLine.restoreSuccess")
+            message = "statusLine.restoreSuccess"
             isError = false
         } catch {
-            message = error.localizedDescription
+            message = LocalizedStringKey(error.localizedDescription)
             isError = true
         }
     }
