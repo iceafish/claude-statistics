@@ -37,6 +37,8 @@
 		FA20F885511C5F92715056F9 /* FSEventsWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35EC230BC5F1EF207A984D87 /* FSEventsWatcher.swift */; };
 		FDBE2C2C6B6D044072235F42 /* UsageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 370D33AC086199C95EC1E2CD /* UsageData.swift */; };
 		FEFC2968DA07D06063D40E24 /* ClaudeStatisticsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68083922F93D555879FAD90B /* ClaudeStatisticsApp.swift */; };
+		D6D792096DAF4600842C192A /* TrendDataPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57B2D9CEC8DD4C668D3698D5 /* TrendDataPoint.swift */; };
+		41EFF42D07344E69A36EC4C9 /* TrendChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69A783C17B6F48D29B9FF7F6 /* TrendChartView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -73,6 +75,8 @@
 		F79555858F7CDF21C9301D11 /* TranscriptParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptParser.swift; sourceTree = "<group>"; };
 		FA42F7AC4BB41556CDC7EFCC /* TerminalLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalLauncher.swift; sourceTree = "<group>"; };
 		FAAFBA5B9EEDC2BB22BAF700 /* AutoRefreshCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoRefreshCoordinator.swift; sourceTree = "<group>"; };
+		57B2D9CEC8DD4C668D3698D5 /* TrendDataPoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendDataPoint.swift; sourceTree = "<group>"; };
+		69A783C17B6F48D29B9FF7F6 /* TrendChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendChartView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -179,6 +183,7 @@
 				2EDF09CC0594DB9C35748FF4 /* AggregateStats.swift */,
 				36F9BBB23CB057720EA99A7B /* Session.swift */,
 				42AB2ACAC763533BC9654BE5 /* TranscriptEntry.swift */,
+				57B2D9CEC8DD4C668D3698D5 /* TrendDataPoint.swift */,
 				370D33AC086199C95EC1E2CD /* UsageData.swift */,
 			);
 			path = Models;
@@ -192,6 +197,7 @@
 				CAF9A88BAC1F779F77E517EB /* SessionListView.swift */,
 				011E707E6F2F284A99ECF925 /* SettingsView.swift */,
 				6E1B839DD5F15A6A55AE3727 /* StatisticsView.swift */,
+				69A783C17B6F48D29B9FF7F6 /* TrendChartView.swift */,
 				3511F107E29217FB16567AF9 /* UsageView.swift */,
 			);
 			path = Views;
@@ -296,6 +302,8 @@
 				861A6FDE8151A6DF1D571793 /* TimeFormatter.swift in Sources */,
 				5B8F2BC01D7A4526CD0AEAA4 /* TranscriptEntry.swift in Sources */,
 				5ABBC48B689D173B40DDB85A /* TranscriptParser.swift in Sources */,
+				D6D792096DAF4600842C192A /* TrendDataPoint.swift in Sources */,
+				41EFF42D07344E69A36EC4C9 /* TrendChartView.swift in Sources */,
 				3AD8ED72F8D42B9DB0614F77 /* UpdaterService.swift in Sources */,
 				E19A0BCA11B03CD13E4A1F04 /* UsageAPIService.swift in Sources */,
 				FDBE2C2C6B6D044072235F42 /* UsageData.swift in Sources */,
@@ -327,11 +335,11 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1.4.1;
+				CURRENT_PROJECT_VERSION = 1.4.2;
 				ENABLE_HARDENED_RUNTIME = NO;
 				INFOPLIST_FILE = ClaudeStatistics/App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
-				MARKETING_VERSION = 1.4.1;
+				MARKETING_VERSION = 1.4.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.tinystone.ClaudeStatistics;
 				PRODUCT_NAME = "Claude Statistics";
 				SDKROOT = macosx;
@@ -403,11 +411,11 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1.4.1;
+				CURRENT_PROJECT_VERSION = 1.4.2;
 				ENABLE_HARDENED_RUNTIME = NO;
 				INFOPLIST_FILE = ClaudeStatistics/App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
-				MARKETING_VERSION = 1.4.1;
+				MARKETING_VERSION = 1.4.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.tinystone.ClaudeStatistics;
 				PRODUCT_NAME = "Claude Statistics";
 				SDKROOT = macosx;
