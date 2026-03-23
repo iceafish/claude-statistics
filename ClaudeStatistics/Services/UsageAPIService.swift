@@ -85,16 +85,28 @@ final class UsageAPIService {
 
     /// Trigger Claude Code CLI to refresh the OAuth token
     func refreshToken() async -> Bool {
+        // GUI apps have limited PATH — resolve claude binary explicitly
+        let candidates = [
+            "\(NSHomeDirectory())/.local/bin/claude",
+            "/usr/local/bin/claude",
+            "/opt/homebrew/bin/claude",
+        ]
+
+        guard let claudePath = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
+            return false
+        }
+
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["claude", "auth", "status"]
+        process.executableURL = URL(fileURLWithPath: claudePath)
+        process.arguments = ["auth", "status"]
         process.standardOutput = Pipe()
         process.standardError = Pipe()
 
         do {
             try process.run()
             process.waitUntilExit()
-            return process.terminationStatus == 0
+            let success = process.terminationStatus == 0
+            return success
         } catch {
             return false
         }

@@ -18,7 +18,11 @@ final class ProfileViewModel: ObservableObject {
         do {
             userProfile = try await UsageAPIService.shared.fetchProfile()
         } catch {
-            // Silent fail — settings will show token-only fallback
+            // Token might be expired — try refreshing via CLI and retry
+            let refreshed = await UsageAPIService.shared.refreshToken()
+            if refreshed {
+                userProfile = try? await UsageAPIService.shared.fetchProfile()
+            }
         }
         profileLoading = false
     }

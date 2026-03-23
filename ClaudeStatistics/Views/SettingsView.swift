@@ -35,8 +35,10 @@ struct SettingsView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 4)
                 .task {
-                    if hasToken == nil {
-                        hasToken = CredentialService.shared.getAccessToken() != nil
+                    let tokenFound = CredentialService.shared.getAccessToken() != nil
+                    hasToken = tokenFound
+                    if tokenFound && profileViewModel.userProfile == nil {
+                        await profileViewModel.loadProfile()
                     }
                 }
 
