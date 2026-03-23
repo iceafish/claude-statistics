@@ -46,7 +46,10 @@
 "detail.assistant" = "Assistant";
 "detail.tools" = "Tools";
 "detail.trend" = "Trend";
+"detail.modelBreakdown" = "Model Breakdown";
 "detail.calls %lld" = "%lld calls";
+"detail.cost" = "Cost";
+"detail.context" = "Context";
 "detail.estimatedCost" = "Estimated Cost";
 "detail.models %lld" = "%lld models";
 "detail.msgs %lld" = "%lld msgs";

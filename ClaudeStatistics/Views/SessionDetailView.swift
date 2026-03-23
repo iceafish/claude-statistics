@@ -167,20 +167,68 @@ struct SessionDetailView: View {
 
     @ViewBuilder
     private func statsContent(_ stats: SessionStats) -> some View {
-        // Overview row
+        // 1. Overview — identity: what session is this
         SectionCard {
-            HStack(spacing: 16) {
-                InfoCell(title: "detail.model", value: displayModel(stats.model), icon: "cpu")
-                Divider().frame(height: 28)
-                if let duration = stats.duration {
-                    InfoCell(title: "detail.duration", value: TimeFormatter.duration(duration), icon: "clock")
+            VStack(spacing: 8) {
+                HStack(spacing: 16) {
+                    InfoCell(title: "detail.model", value: displayModel(stats.model), icon: "cpu")
                     Divider().frame(height: 28)
+                    if let duration = stats.duration {
+                        InfoCell(title: "detail.duration", value: TimeFormatter.duration(duration), icon: "clock")
+                        Divider().frame(height: 28)
+                    }
+                    InfoCell(title: "detail.size", value: TimeFormatter.fileSize(session.fileSize), icon: "doc")
                 }
-                InfoCell(title: "detail.size", value: TimeFormatter.fileSize(session.fileSize), icon: "doc")
+                if let start = stats.startTime {
+                    Divider()
+                    HStack(spacing: 16) {
+                        InfoCell(title: "detail.started", value: TimeFormatter.absoluteDate(start), icon: "calendar")
+                        if let end = stats.endTime {
+                            Divider().frame(height: 28)
+                            InfoCell(title: "detail.lastActive", value: TimeFormatter.absoluteDate(end), icon: "clock.arrow.circlepath")
+                        }
+                    }
+                }
             }
         }
 
-        // Trend chart
+        // 2. Key Metrics
+        SectionCard {
+            VStack(spacing: 8) {
+                HStack(spacing: 16) {
+                    CostCell(cost: stats.estimatedCost, isEstimated: stats.isCostEstimated)
+                    Divider().frame(height: 28)
+                    TokenCell(tokens: stats.totalTokens)
+                    if stats.contextTokens > 0 {
+                        Divider().frame(height: 28)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Label("detail.context", systemImage: "rectangle.stack")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.tertiary)
+                            HStack(spacing: 2) {
+                                Text("\(TimeFormatter.tokenCount(stats.contextTokens))/\(TimeFormatter.tokenCount(stats.contextWindowSize))")
+                                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                Text(String(format: "%.0f%%", stats.contextUsagePercent))
+                                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(contextColor(stats.contextUsagePercent))
+                            }
+                            .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                Divider()
+                HStack(spacing: 16) {
+                    InfoCell(title: "detail.messages", value: "\(stats.messageCount)", icon: "message")
+                    Divider().frame(height: 28)
+                    InfoCell(title: "detail.user", value: "\(stats.userMessageCount)", icon: "person")
+                    Divider().frame(height: 28)
+                    InfoCell(title: "detail.assistant", value: "\(stats.assistantMessageCount)", icon: "brain")
+                }
+            }
+        }
+
+        // 3. Trend — how usage changed over time
         SectionCard {
             VStack(spacing: 8) {
                 HStack {
@@ -215,74 +263,7 @@ struct SessionDetailView: View {
             Task { await loadTrendData() }
         }
 
-        // Context window usage
-        if stats.contextTokens > 0 {
-            SectionCard {
-                VStack(spacing: 6) {
-                    HStack {
-                        Label("detail.contextWindow", systemImage: "rectangle.stack")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("\(TimeFormatter.tokenCount(stats.contextTokens)) / \(TimeFormatter.tokenCount(stats.contextWindowSize))")
-                            .font(.system(size: 11, design: .monospaced))
-                        Text(String(format: "%.0f%%", stats.contextUsagePercent))
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .foregroundStyle(contextColor(stats.contextUsagePercent))
-                    }
-
-                    ProgressView(value: stats.contextUsagePercent, total: 100)
-                        .tint(contextColor(stats.contextUsagePercent))
-                }
-            }
-        }
-
-        if let start = stats.startTime {
-            SectionCard {
-                VStack(spacing: 8) {
-                    HStack(spacing: 16) {
-                        InfoCell(title: "detail.started", value: TimeFormatter.absoluteDate(start), icon: "calendar")
-                        if let end = stats.endTime {
-                            Divider().frame(height: 28)
-                            InfoCell(title: "detail.lastActive", value: TimeFormatter.absoluteDate(end), icon: "clock.arrow.circlepath")
-                        }
-                    }
-                    if let prompt = stats.lastPrompt, !prompt.isEmpty {
-                        Divider()
-                        VStack(alignment: .leading, spacing: 4) {
-                            Label("detail.lastPrompt", systemImage: "text.bubble")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.tertiary)
-                            Text(prompt)
-                                .font(.system(size: 12))
-                                .lineLimit(isPromptExpanded ? nil : 2)
-                                .animation(.easeInOut(duration: 0.2), value: isPromptExpanded)
-                                .textSelection(.enabled)
-                            if prompt.count > 80 {
-                                Button(action: { isPromptExpanded.toggle() }) {
-                                    if isPromptExpanded {
-                                        Text("detail.collapse")
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(.blue)
-                                    } else {
-                                        Text("detail.more")
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(.blue)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-            }
-        }
-
-        // Cost & Models card (merged)
-        CostModelsCard(stats: stats)
-
-        // Tokens card
+        // 4. Token Distribution — breakdown of token types + context window
         SectionCard {
             VStack(spacing: 6) {
                 HStack {
@@ -301,7 +282,6 @@ struct SessionDetailView: View {
                     total: stats.totalTokens
                 )
 
-                // Legend
                 HStack(spacing: 12) {
                     TokenLegend(color: .blue, label: "token.input", value: TimeFormatter.tokenCount(stats.totalInputTokens))
                     TokenLegend(color: .green, label: "token.output", value: TimeFormatter.tokenCount(stats.totalOutputTokens))
@@ -319,22 +299,14 @@ struct SessionDetailView: View {
                     }
                 }
                 .font(.system(size: 10))
+
             }
         }
 
-        // Messages card
-        SectionCard {
-            HStack(spacing: 16) {
-                InfoCell(title: "detail.messages", value: "\(stats.messageCount)", icon: "message")
-                Divider().frame(height: 28)
-                InfoCell(title: "detail.user", value: "\(stats.userMessageCount)", icon: "person")
-                Divider().frame(height: 28)
-                InfoCell(title: "detail.assistant", value: "\(stats.assistantMessageCount)", icon: "brain")
-            }
-        }
+        // 5. Models — per-model cost breakdown
+        CostModelsCard(stats: stats, showCostHeader: false)
 
-
-        // Tool usage card
+        // 6. Tools
         if !stats.toolUseCounts.isEmpty {
             SectionCard {
                 VStack(spacing: 6) {
@@ -505,6 +477,44 @@ struct StatRow: View {
     }
 }
 
+struct CostCell: View {
+    let cost: Double
+    let isEstimated: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label("detail.cost", systemImage: "dollarsign.circle")
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+            HStack(spacing: 1) {
+                if isEstimated {
+                    Text("~").font(.system(size: 10)).foregroundStyle(.orange)
+                }
+                Text(detailFormatCost(cost))
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundStyle(detailCostColor(cost))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct TokenCell: View {
+    let tokens: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label("detail.tokens", systemImage: "number")
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+            Text(TimeFormatter.tokenCount(tokens))
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .foregroundStyle(.blue)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct TokenBar: View {
     let segments: [(color: Color, value: Int)]
     let total: Int
@@ -552,49 +562,67 @@ struct CostModelsCard: View {
     let models: [ModelUsage]
     let totalCost: Double
     let isEstimated: Bool
+    var showCostHeader: Bool = true
     @State private var expandedModels: Set<String> = []
 
     /// Convenience init from SessionStats
-    init(stats: SessionStats) {
+    init(stats: SessionStats, showCostHeader: Bool = true) {
         self.models = stats.asModelUsages
         self.totalCost = stats.estimatedCost
         self.isEstimated = stats.isCostEstimated
+        self.showCostHeader = showCostHeader
     }
 
     /// Convenience init from PeriodStats
-    init(period: PeriodStats) {
+    init(period: PeriodStats, showCostHeader: Bool = true) {
         self.models = period.modelBreakdown.values.sorted { $0.totalTokens > $1.totalTokens }
         self.totalCost = period.totalCost
         self.isEstimated = period.hasEstimatedCost
+        self.showCostHeader = showCostHeader
     }
 
     var body: some View {
         SectionCard {
             VStack(spacing: 8) {
-                // Header: total cost
-                HStack {
-                    Label("detail.estimatedCost", systemImage: "dollarsign.circle")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    if models.count > 1 {
+                if showCostHeader {
+                    // Header: total cost
+                    HStack {
+                        Label("detail.estimatedCost", systemImage: "dollarsign.circle")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if models.count > 1 {
+                            Text("detail.models \(models.count)")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.tertiary)
+                        }
+                        HStack(spacing: 2) {
+                            if isEstimated {
+                                Text("~")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(.orange)
+                            }
+                            Text(detailFormatCost(totalCost))
+                                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                                .foregroundStyle(detailCostColor(totalCost))
+                        }
+                    }
+
+                    Divider()
+                } else {
+                    // Lightweight header for models-only mode
+                    HStack {
+                        Label("detail.modelBreakdown", systemImage: "cpu")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Spacer()
                         Text("detail.models \(models.count)")
                             .font(.system(size: 10))
                             .foregroundStyle(.tertiary)
                     }
-                    HStack(spacing: 2) {
-                        if isEstimated {
-                            Text("~")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.orange)
-                        }
-                        Text(detailFormatCost(totalCost))
-                            .font(.system(size: 16, weight: .bold, design: .monospaced))
-                            .foregroundStyle(detailCostColor(totalCost))
-                    }
-                }
 
-                Divider()
+                    Divider()
+                }
 
                 let maxTokens = max(1, models.first?.totalTokens ?? 1)
                 VStack(spacing: 0) {

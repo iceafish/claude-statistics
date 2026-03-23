@@ -46,7 +46,10 @@
 "detail.assistant" = "助手";
 "detail.tools" = "工具";
 "detail.trend" = "趋势";
+"detail.modelBreakdown" = "模型明细";
 "detail.calls %lld" = "%lld 次调用";
+"detail.cost" = "费用";
+"detail.context" = "上下文";
 "detail.estimatedCost" = "预估费用";
 "detail.models %lld" = "%lld 个模型";
 "detail.msgs %lld" = "%lld 条消息";

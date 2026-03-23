@@ -494,18 +494,26 @@ struct PeriodDetailView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    // Overview
+                    // 1. Overview
                     SectionCard {
-                        HStack(spacing: 12) {
-                            overviewItem("stats.sessions", value: "\(stat.sessionCount)", icon: "list.bullet")
-                            Divider().frame(height: 28)
-                            overviewItem("stats.messages", value: "\(stat.messageCount)", icon: "message")
-                            Divider().frame(height: 28)
-                            overviewItem("stats.tools", value: "\(stat.toolUseCount)", icon: "wrench")
+                        VStack(spacing: 8) {
+                            HStack(spacing: 16) {
+                                CostCell(cost: stat.totalCost, isEstimated: stat.hasEstimatedCost)
+                                Divider().frame(height: 28)
+                                TokenCell(tokens: stat.totalTokens)
+                            }
+                            Divider()
+                            HStack(spacing: 16) {
+                                overviewItem("stats.sessions", value: "\(stat.sessionCount)", icon: "list.bullet")
+                                Divider().frame(height: 28)
+                                overviewItem("stats.messages", value: "\(stat.messageCount)", icon: "message")
+                                Divider().frame(height: 28)
+                                overviewItem("stats.tools", value: "\(stat.toolUseCount)", icon: "wrench")
+                            }
                         }
                     }
 
-                    // Trend chart
+                    // 2. Trend chart
                     SectionCard {
                         VStack(spacing: 8) {
                             Label("detail.trend", systemImage: "chart.line.uptrend.xyaxis")
@@ -520,10 +528,7 @@ struct PeriodDetailView: View {
                         trendData = store.aggregateTrendData(for: stat, periodType: periodType)
                     }
 
-                    // Cost & Models (merged, same as session detail)
-                    CostModelsCard(period: stat)
-
-                    // Token bar
+                    // 3. Token bar
                     SectionCard {
                         VStack(spacing: 6) {
                             HStack {
@@ -555,6 +560,9 @@ struct PeriodDetailView: View {
                             .font(.system(size: 10))
                         }
                     }
+
+                    // 4. Models detail
+                    CostModelsCard(period: stat, showCostHeader: false)
 
                 }
                 .padding(12)
