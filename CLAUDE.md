@@ -3,16 +3,17 @@
 ## Local Debug Build & Test
 
 ```bash
-# Build debug
-xcodebuild build -scheme ClaudeStatistics -configuration Debug \
-  -destination 'platform=macOS' -derivedDataPath /tmp/claude-stats-build
-
-# Kill old instances, then open by FULL PATH
-killall "Claude Statistics" 2>/dev/null; sleep 2
-open "/tmp/claude-stats-build/Build/Products/Debug/Claude Statistics.app"
+bash scripts/run-debug.sh
 ```
 
-**IMPORTANT:** Always use full path to open the debug build. Do NOT use `open -a` — it launches the `/Applications/` installed version via Launch Services, not the new build.
+This script handles everything: kills old instances, cleans stale DerivedData builds, builds debug, re-registers with Launch Services, and launches by full path.
+
+**IMPORTANT:** Always use this script to build and run. Do NOT use `open -a` or build to default DerivedData — multiple registered `.app` bundles with the same bundle ID cause Launch Services conflicts and the app won't appear in the menu bar.
+
+**IMPORTANT:** Only use `/tmp/claude-stats-build` as the derivedDataPath for debug builds. Never use the default Xcode DerivedData path. If conflicts occur, clean up with:
+```bash
+rm -rf ~/Library/Developer/Xcode/DerivedData/ClaudeStatistics-*/Build/Products/Debug/Claude\ Statistics.app
+```
 
 ## Release a New Version
 
