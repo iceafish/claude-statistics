@@ -70,6 +70,7 @@ final class SessionDataStore: ObservableObject {
 
         Task.detached { [weak self] in
             let scannedSessions = SessionScanner.shared.scanSessions()
+            DiagnosticLogger.shared.appLaunched(sessionCount: scannedSessions.count)
 
             await MainActor.run {
                 guard let self else { return }
@@ -110,6 +111,14 @@ final class SessionDataStore: ObservableObject {
                 self.rebucket()
                 self.isFullParseComplete = true
                 self.parseProgress = nil
+
+                let totalMsgs = self.parsedStats.values.reduce(0) { $0 + $1.messageCount }
+                let totalToks = self.parsedStats.values.reduce(0) { $0 + $1.totalTokens }
+                DiagnosticLogger.shared.parsePhaseComplete(
+                    totalSessions: self.parsedStats.count,
+                    totalMessages: totalMsgs,
+                    totalTokens: totalToks
+                )
             }
         }
     }

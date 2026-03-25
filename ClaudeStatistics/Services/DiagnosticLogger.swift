@@ -41,11 +41,22 @@ final class DiagnosticLogger {
         log(level: "PARSE", message: "[\(fileName):\(lineNum)] \(error.localizedDescription)")
     }
 
-    func parsingSummary(file: String, totalLines: Int, skippedLines: Int) {
-        guard skippedLines > 0 else { return }
+    func parsingSummary(file: String, totalLines: Int, skippedLines: Int, messages: Int, tokens: Int) {
         let fileName = (file as NSString).lastPathComponent
-        let pct = totalLines > 0 ? Int(Double(skippedLines) / Double(totalLines) * 100) : 0
-        log(level: "WARN", message: "[\(fileName)] Skipped \(skippedLines)/\(totalLines) lines (\(pct)%)")
+        if skippedLines > 0 {
+            let pct = totalLines > 0 ? Int(Double(skippedLines) / Double(totalLines) * 100) : 0
+            log(level: "WARN", message: "[\(fileName)] lines=\(totalLines) skipped=\(skippedLines)(\(pct)%) msgs=\(messages) tokens=\(tokens)")
+        } else {
+            log(level: "INFO", message: "[\(fileName)] lines=\(totalLines) msgs=\(messages) tokens=\(tokens)")
+        }
+    }
+
+    func appLaunched(sessionCount: Int) {
+        log(level: "INFO", message: "App launched — v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"), \(sessionCount) sessions found")
+    }
+
+    func parsePhaseComplete(totalSessions: Int, totalMessages: Int, totalTokens: Int) {
+        log(level: "INFO", message: "Full parse complete — \(totalSessions) sessions, \(totalMessages) messages, \(totalTokens) tokens")
     }
 
     /// Read the full log content

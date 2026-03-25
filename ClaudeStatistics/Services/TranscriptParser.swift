@@ -128,8 +128,6 @@ final class TranscriptParser {
             }
         }
 
-        logger.parsingSummary(file: path, totalLines: lines.count, skippedLines: skippedLines)
-
         // Sum final per-message usage data
         for (_, accum) in messageData {
             stats.totalInputTokens += accum.inputTokens
@@ -150,6 +148,14 @@ final class TranscriptParser {
             ms.messageCount += 1
             stats.modelBreakdown[accum.model] = ms
         }
+
+        logger.parsingSummary(
+            file: path,
+            totalLines: lines.count,
+            skippedLines: skippedLines,
+            messages: stats.messageCount,
+            tokens: stats.totalTokens
+        )
 
         return stats
     }
