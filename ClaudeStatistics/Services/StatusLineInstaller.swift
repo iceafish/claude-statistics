@@ -437,7 +437,7 @@ struct StatusLineInstaller {
         cost_section=""
 
         cost_val=$(printf "%.2f" "$total_cost" 2>/dev/null || echo "0.00")
-        cost_section="${yellow}${icon_cost} ${green}\\$${cost_val}${reset}"
+        cost_section="${yellow}${icon_cost} ${green}${cost_val}${reset}"
 
         in_tok=$(format_tokens "$total_input_tokens")
         out_tok=$(format_tokens "$total_output_tokens")
