@@ -37,33 +37,29 @@ enum TerminalLauncher {
     /// Open a new Claude session in the same directory
     static func openNewSession(_ session: Session) {
         let cwd = session.cwd ?? decodeProjectPath(session.projectPath) ?? NSHomeDirectory()
-        let command = "cd \(shellEscape(cwd)) && claude"
-        launchInTerminal(command: command)
+        launchInTerminal(cwd: cwd, claudeArgs: "")
     }
 
     /// Open a Claude session in the user's terminal
     static func openSession(_ session: Session) {
         let cwd = session.cwd ?? decodeProjectPath(session.projectPath) ?? NSHomeDirectory()
-        let command = "cd \(shellEscape(cwd)) && claude --resume \(shellEscape(session.id))"
-        launchInTerminal(command: command)
+        launchInTerminal(cwd: cwd, claudeArgs: "--resume \(session.id)")
     }
 
     /// Open a new Claude session in a specific directory
     static func openNewSessionInDirectory(_ path: String) {
-        let command = "cd \(shellEscape(path)) && claude"
-        launchInTerminal(command: command)
+        launchInTerminal(cwd: path, claudeArgs: "")
     }
 
-    private static func launchInTerminal(command: String) {
+    private static func launchInTerminal(cwd: String, claudeArgs: String) {
+        let command = "cd \(shellEscape(cwd)) && claude" + (claudeArgs.isEmpty ? "" : " \(claudeArgs)")
         let preferred = TerminalApp.preferred
-        // Extract cwd from command for terminal apps that need it separately
-        let cwd = NSHomeDirectory()
         switch preferred {
         case .auto:
             if TerminalApp.iterm.isInstalled {
                 openInITerm(command: command)
             } else if TerminalApp.warp.isInstalled {
-                openInWarp(command: command)
+                openInWarp(cwd: cwd, claudeArgs: claudeArgs)
             } else {
                 openInTerminalApp(command: command)
             }
@@ -72,7 +68,7 @@ enum TerminalLauncher {
         case .terminal:
             openInTerminalApp(command: command)
         case .warp:
-            openInWarp(command: command)
+            openInWarp(cwd: cwd, claudeArgs: claudeArgs)
         case .kitty:
             openInKitty(command: command, cwd: cwd)
         case .alacritty:
@@ -109,22 +105,21 @@ enum TerminalLauncher {
 
     // MARK: - Warp
 
-    private static func openInWarp(command: String) {
-        let script = """
-        tell application "Warp"
-            activate
-        end tell
-        delay 0.5
-        tell application "System Events"
-            tell process "Warp"
-                keystroke "t" using command down
-                delay 0.3
-                keystroke "\(escapeAppleScript(command))"
-                key code 36
-            end tell
-        end tell
-        """
-        runOsascript(script)
+    private static func openInWarp(cwd: String, claudeArgs: String) {
+        let claudeCommand = "claude" + (claudeArgs.isEmpty ? "" : " \(claudeArgs)")
+        let scriptPath = (cwd as NSString).appendingPathComponent(".cs-launch")
+        let content = "#!/bin/bash\nrm -f \(shellEscape(scriptPath))\nexec \(claudeCommand)\n"
+        guard (try? content.write(toFile: scriptPath, atomically: true, encoding: .utf8)) != nil,
+              (try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath)) != nil
+        else { return }
+
+        let warpURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "dev.warp.Warp-Stable")
+            ?? URL(fileURLWithPath: "/Applications/Warp.app")
+        NSWorkspace.shared.open(
+            [URL(fileURLWithPath: scriptPath)],
+            withApplicationAt: warpURL,
+            configuration: NSWorkspace.OpenConfiguration()
+        )
     }
 
     // MARK: - Kitty
@@ -215,6 +210,18 @@ enum TerminalLauncher {
 
     private static func shellEscape(_ str: String) -> String {
         "'" + str.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    /// Escape for keystroke-based terminals (avoids quote auto-pairing)
+    private static func backslashEscape(_ str: String) -> String {
+        var result = ""
+        for char in str {
+            if " '\"\\()&|;$`!{}[]#~?*<>".contains(char) {
+                result.append("\\")
+            }
+            result.append(char)
+        }
+        return result
     }
 
     private static func escapeAppleScript(_ str: String) -> String {
