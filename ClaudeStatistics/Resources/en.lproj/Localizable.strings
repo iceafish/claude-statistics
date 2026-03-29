@@ -24,6 +24,7 @@
 "session.delete.help" = "Delete session";
 "session.projectCount %lld" = "%lld projects";
 "session.untitled" = "Untitled Session";
+"session.recent" = "Recent";
 
 /* Session Detail */
 "detail.back" = "Back";

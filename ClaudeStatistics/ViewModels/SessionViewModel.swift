@@ -45,6 +45,11 @@ final class SessionViewModel: ObservableObject {
         self.store = store
     }
 
+    var recentSessions: [Session] {
+        guard searchText.isEmpty else { return [] }
+        return Array(store.sessions.prefix(3))
+    }
+
     var filteredSessions: [Session] {
         if searchText.isEmpty { return store.sessions }
         let query = searchText.lowercased()

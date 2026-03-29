@@ -24,6 +24,7 @@
 "session.delete.help" = "删除会话";
 "session.projectCount %lld" = "%lld 个项目";
 "session.untitled" = "未命名会话";
+"session.recent" = "最近";
 
 /* Session Detail */
 "detail.back" = "返回";

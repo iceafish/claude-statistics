@@ -118,6 +118,37 @@ struct SessionListView: View {
             // Grouped session list
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
+                    // Recent sessions
+                    if !viewModel.recentSessions.isEmpty && !viewModel.isSelecting {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                            Text("session.recent")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.top, 4)
+
+                        ForEach(viewModel.recentSessions) { session in
+                            RecentSessionRow(
+                                session: session,
+                                quickStats: viewModel.quickStat(for: session),
+                                cachedStats: store.parsedStats[session.id],
+                                isSelected: viewModel.selectedSession?.id == session.id,
+                                onTap: { viewModel.selectSession(session) },
+                                onNewSession: { TerminalLauncher.openNewSession(session) },
+                                onResume: { TerminalLauncher.openSession(session) }
+                            )
+                            .id("recent-\(session.id)")
+                        }
+
+                        Divider()
+                            .padding(.vertical, 4)
+                    }
+
                     ForEach(viewModel.projectGroups) { group in
                         ProjectGroupHeader(
                             group: group,
@@ -278,20 +309,13 @@ struct SessionRow: View {
 
     private var primaryTitle: String {
         if grouped {
-            return quickStats?.sessionName ?? quickStats?.topic ?? String(localized: "session.untitled")
+            return quickStats?.topic ?? quickStats?.sessionName ?? String(localized: "session.untitled")
         }
         return session.displayName
     }
 
     private var subtitle: String? {
-        if grouped {
-            // Show topic as subtitle only when sessionName was used as title
-            if quickStats?.sessionName != nil {
-                return quickStats?.topic
-            }
-            return nil
-        }
-        return quickStats?.sessionName ?? quickStats?.topic
+        nil
     }
 
     var body: some View {
@@ -307,6 +331,7 @@ struct SessionRow: View {
                     Text(primaryTitle)
                         .font(.system(size: 12, weight: .medium))
                         .lineLimit(1)
+                        .help(primaryTitle)
 
                     if let model = cachedStats?.model ?? quickStats?.model {
                         Text(shortModel(model))
@@ -328,6 +353,7 @@ struct SessionRow: View {
                         .font(.system(size: 11))
                         .foregroundStyle(.primary.opacity(0.75))
                         .lineLimit(1)
+                        .help(sub)
                 }
 
                 HStack(spacing: 8) {
@@ -424,6 +450,138 @@ struct SessionRow: View {
             .padding(.vertical, 1)
             .background(color.opacity(0.1))
             .cornerRadius(3)
+    }
+}
+
+// MARK: - RecentSessionRow
+
+struct RecentSessionRow: View {
+    let session: Session
+    let quickStats: TranscriptParser.QuickStats?
+    let cachedStats: SessionStats?
+    let isSelected: Bool
+    let onTap: () -> Void
+    let onNewSession: () -> Void
+    let onResume: () -> Void
+    @State private var isHovered = false
+
+    private var title: String {
+        quickStats?.topic ?? quickStats?.sessionName ?? String(localized: "session.untitled")
+    }
+
+    private var shortPath: String {
+        let home = NSHomeDirectory()
+        let path = session.cwd ?? session.displayName
+        if path.hasPrefix(home) {
+            return "~" + path.dropFirst(home.count)
+        }
+        return path
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                // Line 1: title + model badge
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.system(size: 12, weight: .medium))
+                        .lineLimit(1)
+                        .help(title)
+
+                    if let model = cachedStats?.model ?? quickStats?.model {
+                        Text(shortModel(model))
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Color.gray.opacity(0.1))
+                            .cornerRadius(3)
+                    }
+
+                    if isHovered {
+                        CopyButton(text: session.displayName, help: "detail.copyPath")
+                    }
+                }
+
+                // Line 2: project path · date · messages · tokens · cost · context%
+                HStack(spacing: 8) {
+                    Label(shortPath, systemImage: "folder")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+
+                    Text(TimeFormatter.relativeDate(session.lastModified))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+
+                    if let stats = cachedStats {
+                        Label("\(stats.messageCount)", systemImage: "message")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
+                        Text(TimeFormatter.tokenCount(stats.totalTokens))
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                        Text(formatCost(stats.estimatedCost))
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundStyle(costColor(stats.estimatedCost))
+
+                        if stats.contextTokens > 0 {
+                            let pct = stats.contextUsagePercent
+                            let color: Color = pct >= 80 ? .red : pct >= 50 ? .orange : .green
+                            Text(String(format: "%.0f%%", pct))
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .foregroundStyle(color)
+                                .padding(.horizontal, 3)
+                                .padding(.vertical, 1)
+                                .background(color.opacity(0.1))
+                                .cornerRadius(3)
+                        }
+                    } else if let qs = quickStats, qs.messageCount > 0 {
+                        Label("\(qs.messageCount)", systemImage: "message")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
+                        Text(TimeFormatter.fileSize(session.fileSize))
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    } else {
+                        Text(TimeFormatter.fileSize(session.fileSize))
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+
+            Spacer()
+
+            if isHovered {
+                Button(action: onNewSession) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.green)
+                }
+                .buttonStyle(.plain)
+                .help("session.new.help")
+
+                Button(action: onResume) {
+                    Image(systemName: "terminal")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.blue)
+                }
+                .buttonStyle(.plain)
+                .help("session.resume.help")
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .background(isSelected ? Color.blue.opacity(0.15) : isHovered ? Color.gray.opacity(0.06) : Color.clear)
+        .cornerRadius(4)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
+        .onHover { isHovered = $0 }
     }
 }
 
