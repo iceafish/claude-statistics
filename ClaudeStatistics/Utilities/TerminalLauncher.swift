@@ -3,6 +3,7 @@ import Foundation
 
 enum TerminalApp: String, CaseIterable, Identifiable {
     case auto = "Auto"
+    case ghostty = "Ghostty"
     case iterm = "iTerm2"
     case terminal = "Terminal"
     case warp = "Warp"
@@ -24,6 +25,7 @@ enum TerminalApp: String, CaseIterable, Identifiable {
     var isInstalled: Bool {
         switch self {
         case .auto: return true
+        case .ghostty: return NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.mitchellh.ghostty") != nil
         case .iterm: return NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.googlecode.iterm2") != nil
         case .terminal: return true // always available
         case .warp: return NSWorkspace.shared.urlForApplication(withBundleIdentifier: "dev.warp.Warp-Stable") != nil
@@ -56,13 +58,17 @@ enum TerminalLauncher {
         let preferred = TerminalApp.preferred
         switch preferred {
         case .auto:
-            if TerminalApp.iterm.isInstalled {
+            if TerminalApp.ghostty.isInstalled {
+                openInGhostty(command: command, cwd: cwd)
+            } else if TerminalApp.iterm.isInstalled {
                 openInITerm(command: command)
             } else if TerminalApp.warp.isInstalled {
                 openInWarp(cwd: cwd, claudeArgs: claudeArgs)
             } else {
                 openInTerminalApp(command: command)
             }
+        case .ghostty:
+            openInGhostty(command: command, cwd: cwd)
         case .iterm:
             openInITerm(command: command)
         case .terminal:
@@ -74,6 +80,18 @@ enum TerminalLauncher {
         case .alacritty:
             openInAlacritty(command: command, cwd: cwd)
         }
+    }
+
+    // MARK: - Ghostty
+
+    private static func openInGhostty(command: String, cwd: String) {
+        let strippedCommand = command.replacingOccurrences(of: "cd \(shellEscape(cwd)) && ", with: "")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/Applications/Ghostty.app/Contents/MacOS/ghostty")
+        process.arguments = ["--working-directory=\(cwd)", "-e", "bash", "-c", strippedCommand + "; exec bash"]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        try? process.run()
     }
 
     // MARK: - iTerm2
