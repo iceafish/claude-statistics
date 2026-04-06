@@ -59,7 +59,7 @@ enum TerminalLauncher {
         switch preferred {
         case .auto:
             if TerminalApp.ghostty.isInstalled {
-                openInGhostty(command: command, cwd: cwd)
+                openInGhostty(cwd: cwd, claudeArgs: claudeArgs)
             } else if TerminalApp.iterm.isInstalled {
                 openInITerm(command: command)
             } else if TerminalApp.warp.isInstalled {
@@ -68,7 +68,7 @@ enum TerminalLauncher {
                 openInTerminalApp(command: command)
             }
         case .ghostty:
-            openInGhostty(command: command, cwd: cwd)
+            openInGhostty(cwd: cwd, claudeArgs: claudeArgs)
         case .iterm:
             openInITerm(command: command)
         case .terminal:
@@ -84,14 +84,21 @@ enum TerminalLauncher {
 
     // MARK: - Ghostty
 
-    private static func openInGhostty(command: String, cwd: String) {
-        let strippedCommand = command.replacingOccurrences(of: "cd \(shellEscape(cwd)) && ", with: "")
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/Applications/Ghostty.app/Contents/MacOS/ghostty")
-        process.arguments = ["--working-directory=\(cwd)", "-e", "bash", "-c", strippedCommand + "; exec bash"]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
-        try? process.run()
+    private static func openInGhostty(cwd: String, claudeArgs: String) {
+        let claudeCommand = "claude" + (claudeArgs.isEmpty ? "" : " \(claudeArgs)")
+        let scriptPath = (cwd as NSString).appendingPathComponent(".cs-launch")
+        let content = "#!/bin/zsh -l\nrm -f \(shellEscape(scriptPath))\nexec \(claudeCommand)\n"
+        guard (try? content.write(toFile: scriptPath, atomically: true, encoding: .utf8)) != nil,
+              (try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath)) != nil
+        else { return }
+
+        let ghosttyURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.mitchellh.ghostty")
+            ?? URL(fileURLWithPath: "/Applications/Ghostty.app")
+        NSWorkspace.shared.open(
+            [URL(fileURLWithPath: scriptPath)],
+            withApplicationAt: ghosttyURL,
+            configuration: NSWorkspace.OpenConfiguration()
+        )
     }
 
     // MARK: - iTerm2
