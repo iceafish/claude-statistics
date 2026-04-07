@@ -22,6 +22,7 @@
 "session.new.help" = "在相同目录新建会话";
 "session.resume.help" = "恢复会话";
 "session.delete.help" = "删除会话";
+"session.transcript.help" = "查看对话";
 "session.projectCount %lld" = "%lld 个项目";
 "session.untitled" = "未命名会话";
 "session.recent" = "最近";
@@ -168,6 +169,13 @@
 "language.en" = "English";
 "language.zhHans" = "简体中文";
 "language.restartHint" = "重启应用以应用语言更改";
+
+/* Transcript */
+"detail.transcript" = "对话";
+"transcript.title %lld" = "%lld 条消息";
+"transcript.search" = "搜索对话内容…";
+"transcript.loading" = "加载消息中…";
+"transcript.noMatch" = "无匹配";
 
 /* Period Names */
 "period.daily" = "按天";

@@ -34,8 +34,13 @@ echo "** BUILD SUCCEEDED **"
 # 4. Re-register with Launch Services so macOS knows this is the active build
 ${LSREGISTER} -f -R -trusted "${APP_PATH}"
 
-# 5. Launch
+# 5. Launch directly by binary path (bypasses Launch Services entirely)
 echo "==> Launching..."
-open "${APP_PATH}"
+nohup "${APP_PATH}/Contents/MacOS/${APP_NAME}" >/dev/null 2>&1 &
+sleep 1
 
-echo "==> Done!"
+if pgrep -x "${APP_NAME}" >/dev/null 2>&1; then
+  echo "==> Done! (PID: $(pgrep -x "${APP_NAME}"))"
+else
+  echo "==> WARNING: App may not have started"
+fi

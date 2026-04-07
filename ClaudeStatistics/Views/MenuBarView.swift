@@ -128,7 +128,15 @@ struct MenuBarView: View {
 
     @ViewBuilder
     private var sessionContent: some View {
-        if let session = sessionViewModel.selectedSession {
+        if let session = sessionViewModel.selectedSession, sessionViewModel.showTranscript {
+            TranscriptView(
+                session: session,
+                initialSearchQuery: sessionViewModel.transcriptSearchQuery,
+                initialSnippetContext: sessionViewModel.transcriptSnippetContext,
+                onBack: { sessionViewModel.closeTranscript() },
+                viewModel: sessionViewModel
+            )
+        } else if let session = sessionViewModel.selectedSession {
             SessionDetailView(
                 session: session,
                 topic: store.quickStats[session.id]?.topic,
@@ -140,7 +148,8 @@ struct MenuBarView: View {
                     sessionViewModel.deleteSession(session)
                     sessionViewModel.selectedSession = nil
                     sessionViewModel.selectedSessionStats = nil
-                }
+                },
+                onViewTranscript: { sessionViewModel.openTranscript(for: session) }
             )
         } else {
             SessionListView(viewModel: sessionViewModel, store: store)

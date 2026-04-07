@@ -140,7 +140,8 @@ struct SessionListView: View {
                                 isSelected: viewModel.selectedSession?.id == session.id,
                                 onTap: { viewModel.selectSession(session) },
                                 onNewSession: { TerminalLauncher.openNewSession(session) },
-                                onResume: { TerminalLauncher.openSession(session) }
+                                onResume: { TerminalLauncher.openSession(session) },
+                                onViewTranscript: { viewModel.openTranscript(for: session) }
                             )
                             .id("recent-\(session.id)")
                         }
@@ -174,6 +175,18 @@ struct SessionListView: View {
                                     isSelecting: viewModel.isSelecting,
                                     isChecked: viewModel.selectedIds.contains(session.id),
                                     grouped: true,
+                                    searchSnippet: viewModel.searchSnippets[session.id],
+                                    searchQuery: viewModel.searchText,
+                                    onSnippetTap: viewModel.searchSnippets[session.id] != nil ? {
+                                        viewModel.openTranscript(
+                                            for: session,
+                                            searchQuery: viewModel.searchText,
+                                            snippetContext: viewModel.searchSnippets[session.id]
+                                        )
+                                    } : nil,
+                                    onViewTranscript: {
+                                        viewModel.openTranscript(for: session)
+                                    },
                                     onTap: {
                                         if viewModel.isSelecting {
                                             viewModel.toggleSelect(session)
@@ -301,6 +314,10 @@ struct SessionRow: View {
     let isSelecting: Bool
     let isChecked: Bool
     var grouped: Bool = false
+    var searchSnippet: String? = nil
+    var searchQuery: String = ""
+    var onSnippetTap: (() -> Void)? = nil
+    var onViewTranscript: (() -> Void)? = nil
     let onTap: () -> Void
     let onNewSession: () -> Void
     let onResume: () -> Void
@@ -388,6 +405,21 @@ struct SessionRow: View {
                             .foregroundStyle(.tertiary)
                     }
                 }
+
+                // Search snippet from FTS content match
+                if let snippet = searchSnippet {
+                    Button(action: { onSnippetTap?() }) {
+                        SnippetText(snippet: snippet, searchText: searchQuery)
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { hovering in
+                        if hovering {
+                            NSCursor.pointingHand.push()
+                        } else {
+                            NSCursor.pop()
+                        }
+                    }
+                }
             }
 
             Spacer()
@@ -401,6 +433,16 @@ struct SessionRow: View {
                     }
                     .buttonStyle(.plain)
                     .help("session.new.help")
+                }
+
+                if let onViewTranscript {
+                    Button(action: onViewTranscript) {
+                        Image(systemName: "text.bubble")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.orange)
+                    }
+                    .buttonStyle(.plain)
+                    .help("session.transcript.help")
                 }
 
                 Button(action: onResume) {
@@ -463,6 +505,7 @@ struct RecentSessionRow: View {
     let onTap: () -> Void
     let onNewSession: () -> Void
     let onResume: () -> Void
+    var onViewTranscript: (() -> Void)? = nil
     @State private var isHovered = false
 
     private var title: String {
@@ -554,6 +597,16 @@ struct RecentSessionRow: View {
             Spacer()
 
             if isHovered {
+                if let onViewTranscript {
+                    Button(action: onViewTranscript) {
+                        Image(systemName: "text.bubble")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.orange)
+                    }
+                    .buttonStyle(.plain)
+                    .help("session.transcript.help")
+                }
+
                 Button(action: onNewSession) {
                     Image(systemName: "plus")
                         .font(.system(size: 10))
@@ -582,6 +635,38 @@ struct RecentSessionRow: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
         .onHover { isHovered = $0 }
+    }
+}
+
+// MARK: - SnippetText
+
+/// Renders a FTS snippet with search term highlighting
+struct SnippetText: View {
+    let snippet: String
+    var searchText: String = ""
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 3) {
+            Image(systemName: "text.magnifyingglass")
+                .font(.system(size: 9))
+                .foregroundStyle(.orange)
+                .padding(.top, 2)
+            highlightedSnippet()
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func highlightedSnippet() -> Text {
+        // Strip FTS markers
+        let plain = snippet
+            .replacingOccurrences(of: "«", with: "")
+            .replacingOccurrences(of: "»", with: "")
+
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return Text(plain) }
+
+        return SearchUtils.highlightedText(plain, query: query)
     }
 }
 

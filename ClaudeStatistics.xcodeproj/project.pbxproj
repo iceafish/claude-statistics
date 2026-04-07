@@ -20,11 +20,14 @@
 		5B8F2BC01D7A4526CD0AEAA4 /* TranscriptEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42AB2ACAC763533BC9654BE5 /* TranscriptEntry.swift */; };
 		686EC93B311494291E5BCE75 /* StatisticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E1B839DD5F15A6A55AE3727 /* StatisticsView.swift */; };
 		6BA90267FC02621878E80D2A /* TrendChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEDC6DF1C15355DC5AE2FCF9 /* TrendChartView.swift */; };
+		7674AC8643AF2C6126880D3C /* TranscriptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73D3015C65881224ECFCC5BB /* TranscriptView.swift */; };
 		7FEDE160B6E6484B272C2078 /* TerminalLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA42F7AC4BB41556CDC7EFCC /* TerminalLauncher.swift */; };
 		861A6FDE8151A6DF1D571793 /* TimeFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15FB669CCF4C2F10D4550624 /* TimeFormatter.swift */; };
+		8D240F8C55163EE6DD3DAC08 /* SearchUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EBE034854D1539811ED0D5F /* SearchUtils.swift */; };
 		9BE83C21285426ACBCAE6024 /* SessionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAF9A88BAC1F779F77E517EB /* SessionListView.swift */; };
 		A795EC97A42092FD1CDDABEB /* StatusLineInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBCC86BBB585FC2927B58640 /* StatusLineInstaller.swift */; };
 		A808622B78A49E54748B910A /* SessionScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A4A95A6629B2D5258EA882D /* SessionScanner.swift */; };
+		AC04F7B90669B03A4D8B3551 /* DatabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6749A9BF125AC2A04C7043D5 /* DatabaseService.swift */; };
 		AC5082113B4136915E426299 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 2710C957B5C3CF8708B02CC6 /* Localizable.strings */; };
 		AD026F88B93877B8DC87E042 /* CredentialService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42069DDFAB4457A16AF6492F /* CredentialService.swift */; };
 		BC876DE9A69A88B6272F0842 /* TrendDataPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CA29EE31F9DA05A4CB0442F /* TrendDataPoint.swift */; };
@@ -33,6 +36,7 @@
 		D64171EFA61052FC0A315681 /* SessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58B71B5593D63536AB462D70 /* SessionViewModel.swift */; };
 		E04B621B671D090DB9155348 /* LanguageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1519B833F38D44123500B58 /* LanguageManager.swift */; };
 		E19A0BCA11B03CD13E4A1F04 /* UsageAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D3BC22C81208BA2B853C240 /* UsageAPIService.swift */; };
+		E19C7F4107E38E4F014A9A27 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 7803032F49F6D004A094939E /* libsqlite3.tbd */; };
 		E26C6870A1E9540BCA9E7045 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011E707E6F2F284A99ECF925 /* SettingsView.swift */; };
 		E45AD6199CAB1661300675D6 /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD0415091A24EBCDA6840A49 /* SessionDetailView.swift */; };
 		F3272760285AF18F519D8E80 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41054FA7DE043B7E25B4A88E /* MenuBarView.swift */; };
@@ -40,6 +44,7 @@
 		FA20F885511C5F92715056F9 /* FSEventsWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35EC230BC5F1EF207A984D87 /* FSEventsWatcher.swift */; };
 		FDBE2C2C6B6D044072235F42 /* UsageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 370D33AC086199C95EC1E2CD /* UsageData.swift */; };
 		FEFC2968DA07D06063D40E24 /* ClaudeStatisticsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68083922F93D555879FAD90B /* ClaudeStatisticsApp.swift */; };
+		FF23B86D06717D1D06D1BC63 /* MarkdownView in Frameworks */ = {isa = PBXBuildFile; productRef = D9B81B6A9F5F3A3C056BB0D3 /* MarkdownView */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,6 +53,7 @@
 		15FB669CCF4C2F10D4550624 /* TimeFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeFormatter.swift; sourceTree = "<group>"; };
 		1850A208EA7AE5CDF9896207 /* ProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewModel.swift; sourceTree = "<group>"; };
 		1A4A95A6629B2D5258EA882D /* SessionScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionScanner.swift; sourceTree = "<group>"; };
+		1EBE034854D1539811ED0D5F /* SearchUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchUtils.swift; sourceTree = "<group>"; };
 		2EDF09CC0594DB9C35748FF4 /* AggregateStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AggregateStats.swift; sourceTree = "<group>"; };
 		3511F107E29217FB16567AF9 /* UsageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageView.swift; sourceTree = "<group>"; };
 		35EC230BC5F1EF207A984D87 /* FSEventsWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FSEventsWatcher.swift; sourceTree = "<group>"; };
@@ -61,9 +67,12 @@
 		58B71B5593D63536AB462D70 /* SessionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionViewModel.swift; sourceTree = "<group>"; };
 		5CA29EE31F9DA05A4CB0442F /* TrendDataPoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendDataPoint.swift; sourceTree = "<group>"; };
 		609271D9D2750E6DBBCFFAC5 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		6749A9BF125AC2A04C7043D5 /* DatabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseService.swift; sourceTree = "<group>"; };
 		68083922F93D555879FAD90B /* ClaudeStatisticsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeStatisticsApp.swift; sourceTree = "<group>"; };
 		6E1B839DD5F15A6A55AE3727 /* StatisticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatisticsView.swift; sourceTree = "<group>"; };
+		73D3015C65881224ECFCC5BB /* TranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptView.swift; sourceTree = "<group>"; };
 		77339C38F26D780CFD6D03EB /* ClaudeStatistics.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeStatistics.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7803032F49F6D004A094939E /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 		7D3BC22C81208BA2B853C240 /* UsageAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageAPIService.swift; sourceTree = "<group>"; };
 		A776ADBF033757E89353F9E2 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		B466FB316C76AB0C39E12E7B /* DiagnosticLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLogger.swift; sourceTree = "<group>"; };
@@ -87,12 +96,22 @@
 			buildActionMask = 2147483647;
 			files = (
 				45389ED6B2BB7C7A180BE038 /* Sparkle in Frameworks */,
+				FF23B86D06717D1D06D1BC63 /* MarkdownView in Frameworks */,
+				E19C7F4107E38E4F014A9A27 /* libsqlite3.tbd in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1341AC1398085D0EADE92592 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				7803032F49F6D004A094939E /* libsqlite3.tbd */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		1B498AB9E13809CA8F036D81 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -106,6 +125,7 @@
 			children = (
 				FAAFBA5B9EEDC2BB22BAF700 /* AutoRefreshCoordinator.swift */,
 				D1519B833F38D44123500B58 /* LanguageManager.swift */,
+				1EBE034854D1539811ED0D5F /* SearchUtils.swift */,
 				FA42F7AC4BB41556CDC7EFCC /* TerminalLauncher.swift */,
 				15FB669CCF4C2F10D4550624 /* TimeFormatter.swift */,
 			);
@@ -116,6 +136,7 @@
 			isa = PBXGroup;
 			children = (
 				42069DDFAB4457A16AF6492F /* CredentialService.swift */,
+				6749A9BF125AC2A04C7043D5 /* DatabaseService.swift */,
 				B466FB316C76AB0C39E12E7B /* DiagnosticLogger.swift */,
 				35EC230BC5F1EF207A984D87 /* FSEventsWatcher.swift */,
 				054E2C5CD2CBA7B14AFF897A /* PricingFetchService.swift */,
@@ -166,6 +187,7 @@
 			isa = PBXGroup;
 			children = (
 				2BCAA708931662EBE00EF601 /* ClaudeStatistics */,
+				1341AC1398085D0EADE92592 /* Frameworks */,
 				1B498AB9E13809CA8F036D81 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -200,6 +222,7 @@
 				CAF9A88BAC1F779F77E517EB /* SessionListView.swift */,
 				011E707E6F2F284A99ECF925 /* SettingsView.swift */,
 				6E1B839DD5F15A6A55AE3727 /* StatisticsView.swift */,
+				73D3015C65881224ECFCC5BB /* TranscriptView.swift */,
 				EEDC6DF1C15355DC5AE2FCF9 /* TrendChartView.swift */,
 				3511F107E29217FB16567AF9 /* UsageView.swift */,
 			);
@@ -224,6 +247,7 @@
 			name = ClaudeStatistics;
 			packageProductDependencies = (
 				0065997B44AE9D9948026A26 /* Sparkle */,
+				D9B81B6A9F5F3A3C056BB0D3 /* MarkdownView */,
 			);
 			productName = ClaudeStatistics;
 			productReference = 77339C38F26D780CFD6D03EB /* ClaudeStatistics.app */;
@@ -254,6 +278,7 @@
 			mainGroup = 79503F339D346E2E9123C7F3;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				5F9FB62C1777AE296FFAEE72 /* XCRemoteSwiftPackageReference "MarkdownView" */,
 				C927BC02711A30BEB80F2218 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -287,12 +312,14 @@
 				4A69484840B48CDE187957E0 /* AutoRefreshCoordinator.swift in Sources */,
 				FEFC2968DA07D06063D40E24 /* ClaudeStatisticsApp.swift in Sources */,
 				AD026F88B93877B8DC87E042 /* CredentialService.swift in Sources */,
+				AC04F7B90669B03A4D8B3551 /* DatabaseService.swift in Sources */,
 				552244856F222EE6F9AFE7DA /* DiagnosticLogger.swift in Sources */,
 				FA20F885511C5F92715056F9 /* FSEventsWatcher.swift in Sources */,
 				E04B621B671D090DB9155348 /* LanguageManager.swift in Sources */,
 				F3272760285AF18F519D8E80 /* MenuBarView.swift in Sources */,
 				4809D9A533DA37D1B71D1592 /* PricingFetchService.swift in Sources */,
 				0BD1DED6EC1DFF9326A1CAE5 /* ProfileViewModel.swift in Sources */,
+				8D240F8C55163EE6DD3DAC08 /* SearchUtils.swift in Sources */,
 				1D84A21259B5673F6ABDFCC1 /* Session.swift in Sources */,
 				3F7B6FCC8858E6DEECB776A0 /* SessionDataStore.swift in Sources */,
 				E45AD6199CAB1661300675D6 /* SessionDetailView.swift in Sources */,
@@ -306,6 +333,7 @@
 				861A6FDE8151A6DF1D571793 /* TimeFormatter.swift in Sources */,
 				5B8F2BC01D7A4526CD0AEAA4 /* TranscriptEntry.swift in Sources */,
 				5ABBC48B689D173B40DDB85A /* TranscriptParser.swift in Sources */,
+				7674AC8643AF2C6126880D3C /* TranscriptView.swift in Sources */,
 				6BA90267FC02621878E80D2A /* TrendChartView.swift in Sources */,
 				BC876DE9A69A88B6272F0842 /* TrendDataPoint.swift in Sources */,
 				3AD8ED72F8D42B9DB0614F77 /* UpdaterService.swift in Sources */,
@@ -347,6 +375,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.tinystone.ClaudeStatistics;
 				PRODUCT_NAME = "Claude Statistics";
 				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = minimal;
 			};
 			name = Release;
 		};
@@ -423,6 +452,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.tinystone.ClaudeStatistics;
 				PRODUCT_NAME = "Claude Statistics";
 				SDKROOT = macosx;
+				SWIFT_STRICT_CONCURRENCY = minimal;
 			};
 			name = Debug;
 		};
@@ -514,6 +544,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		5F9FB62C1777AE296FFAEE72 /* XCRemoteSwiftPackageReference "MarkdownView" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/LiYanan2004/MarkdownView";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.1;
+			};
+		};
 		C927BC02711A30BEB80F2218 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sparkle-project/Sparkle";
@@ -529,6 +567,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = C927BC02711A30BEB80F2218 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		D9B81B6A9F5F3A3C056BB0D3 /* MarkdownView */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5F9FB62C1777AE296FFAEE72 /* XCRemoteSwiftPackageReference "MarkdownView" */;
+			productName = MarkdownView;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -9,6 +9,7 @@ struct SessionDetailView: View {
     let isLoading: Bool
     let onBack: () -> Void
     var onDelete: (() -> Void)? = nil
+    var onViewTranscript: (() -> Void)? = nil
 
     @State private var showDeleteConfirm = false
     @State private var isTopicExpanded = false
@@ -41,6 +42,15 @@ struct SessionDetailView: View {
                             .foregroundStyle(.red)
                     }
                     .buttonStyle(.plain)
+                }
+
+                if let onViewTranscript {
+                    Button(action: onViewTranscript) {
+                        Label("detail.transcript", systemImage: "text.bubble")
+                            .font(.system(size: 11))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
 
                 Button(action: { TerminalLauncher.openNewSession(session) }) {

@@ -28,7 +28,7 @@ struct Session: Identifiable, Hashable {
     }
 }
 
-struct ModelTokenStats {
+struct ModelTokenStats: Codable {
     var inputTokens: Int = 0
     var outputTokens: Int = 0
     var cacheCreation5mTokens: Int = 0
@@ -44,7 +44,7 @@ struct ModelTokenStats {
     }
 }
 
-struct SessionStats {
+struct SessionStats: Codable {
     var model: String = "Unknown"
     var totalInputTokens: Int = 0
     var totalOutputTokens: Int = 0
@@ -141,7 +141,71 @@ struct SessionStats {
     /// Sessions spanning multiple days have tokens attributed to each day.
     var daySlices: [Date: DaySlice] = [:]
 
-    struct DaySlice {
+    // Custom Codable for daySlices (Date keys → String keys as timeIntervalSince1970)
+    enum CodingKeys: String, CodingKey {
+        case model, totalInputTokens, totalOutputTokens
+        case cacheCreation5mTokens, cacheCreation1hTokens, cacheCreationTotalTokens, cacheReadTokens
+        case messageCount, userMessageCount, assistantMessageCount
+        case toolUseCounts, startTime, endTime, lastPrompt, contextTokens, modelBreakdown
+        case daySlices
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(model, forKey: .model)
+        try container.encode(totalInputTokens, forKey: .totalInputTokens)
+        try container.encode(totalOutputTokens, forKey: .totalOutputTokens)
+        try container.encode(cacheCreation5mTokens, forKey: .cacheCreation5mTokens)
+        try container.encode(cacheCreation1hTokens, forKey: .cacheCreation1hTokens)
+        try container.encode(cacheCreationTotalTokens, forKey: .cacheCreationTotalTokens)
+        try container.encode(cacheReadTokens, forKey: .cacheReadTokens)
+        try container.encode(messageCount, forKey: .messageCount)
+        try container.encode(userMessageCount, forKey: .userMessageCount)
+        try container.encode(assistantMessageCount, forKey: .assistantMessageCount)
+        try container.encode(toolUseCounts, forKey: .toolUseCounts)
+        try container.encodeIfPresent(startTime, forKey: .startTime)
+        try container.encodeIfPresent(endTime, forKey: .endTime)
+        try container.encodeIfPresent(lastPrompt, forKey: .lastPrompt)
+        try container.encode(contextTokens, forKey: .contextTokens)
+        try container.encode(modelBreakdown, forKey: .modelBreakdown)
+        // Convert Date keys to String (timeIntervalSince1970)
+        let stringKeyed = Dictionary(uniqueKeysWithValues:
+            daySlices.map { (String($0.key.timeIntervalSince1970), $0.value) }
+        )
+        try container.encode(stringKeyed, forKey: .daySlices)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        model = try container.decodeIfPresent(String.self, forKey: .model) ?? "Unknown"
+        totalInputTokens = try container.decodeIfPresent(Int.self, forKey: .totalInputTokens) ?? 0
+        totalOutputTokens = try container.decodeIfPresent(Int.self, forKey: .totalOutputTokens) ?? 0
+        cacheCreation5mTokens = try container.decodeIfPresent(Int.self, forKey: .cacheCreation5mTokens) ?? 0
+        cacheCreation1hTokens = try container.decodeIfPresent(Int.self, forKey: .cacheCreation1hTokens) ?? 0
+        cacheCreationTotalTokens = try container.decodeIfPresent(Int.self, forKey: .cacheCreationTotalTokens) ?? 0
+        cacheReadTokens = try container.decodeIfPresent(Int.self, forKey: .cacheReadTokens) ?? 0
+        messageCount = try container.decodeIfPresent(Int.self, forKey: .messageCount) ?? 0
+        userMessageCount = try container.decodeIfPresent(Int.self, forKey: .userMessageCount) ?? 0
+        assistantMessageCount = try container.decodeIfPresent(Int.self, forKey: .assistantMessageCount) ?? 0
+        toolUseCounts = try container.decodeIfPresent([String: Int].self, forKey: .toolUseCounts) ?? [:]
+        startTime = try container.decodeIfPresent(Date.self, forKey: .startTime)
+        endTime = try container.decodeIfPresent(Date.self, forKey: .endTime)
+        lastPrompt = try container.decodeIfPresent(String.self, forKey: .lastPrompt)
+        contextTokens = try container.decodeIfPresent(Int.self, forKey: .contextTokens) ?? 0
+        modelBreakdown = try container.decodeIfPresent([String: ModelTokenStats].self, forKey: .modelBreakdown) ?? [:]
+        // Convert String keys back to Date
+        let stringKeyed = try container.decodeIfPresent([String: DaySlice].self, forKey: .daySlices) ?? [:]
+        daySlices = Dictionary(uniqueKeysWithValues:
+            stringKeyed.compactMap { key, value -> (Date, DaySlice)? in
+                guard let ti = Double(key) else { return nil }
+                return (Date(timeIntervalSince1970: ti), value)
+            }
+        )
+    }
+
+    init() {}
+
+    struct DaySlice: Codable {
         var totalInputTokens: Int = 0
         var totalOutputTokens: Int = 0
         var cacheCreation5mTokens: Int = 0

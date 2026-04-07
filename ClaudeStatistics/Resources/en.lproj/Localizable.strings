@@ -22,6 +22,7 @@
 "session.new.help" = "New session in same directory";
 "session.resume.help" = "Resume session";
 "session.delete.help" = "Delete session";
+"session.transcript.help" = "View conversation";
 "session.projectCount %lld" = "%lld projects";
 "session.untitled" = "Untitled Session";
 "session.recent" = "Recent";
@@ -168,6 +169,13 @@
 "language.en" = "English";
 "language.zhHans" = "简体中文";
 "language.restartHint" = "Restart app to apply language change";
+
+/* Transcript */
+"detail.transcript" = "Chat";
+"transcript.title %lld" = "%lld messages";
+"transcript.search" = "Search in conversation...";
+"transcript.loading" = "Loading messages...";
+"transcript.noMatch" = "No match";
 
 /* Period Names */
 "period.daily" = "Daily";

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 struct ProjectGroup: Identifiable {
     var id: String { projectPath }
@@ -41,8 +42,41 @@ final class SessionViewModel: ObservableObject {
     @Published var selectedIds: Set<String> = []
     @Published var collapsedProjects: Set<String> = []
 
+    /// Transcript view state
+    @Published var showTranscript = false
+    @Published var transcriptSearchQuery: String?
+    @Published var transcriptSnippetContext: String?
+    @Published var transcriptSearchText: String = ""
+    @Published var transcriptMatchIndex: Int = 0
+    @Published var transcriptInitialLoadDone = false
+    private var transcriptEnteredFromList = false
+
+    /// Snippets from FTS content search, keyed by session ID
+    @Published var searchSnippets: [String: String] = [:]
+
+    private var searchCancellable: AnyCancellable?
+
     init(store: SessionDataStore) {
         self.store = store
+
+        // Debounced FTS content search — updates searchSnippets reactively
+        searchCancellable = $searchText
+            .removeDuplicates()
+            .debounce(for: .milliseconds(150), scheduler: RunLoop.main)
+            .sink { [weak self] text in
+                guard let self else { return }
+                if text.count >= 2 {
+                    let results = self.store.searchMessages(query: text)
+                    self.searchSnippets = Dictionary(
+                        results.map { ($0.sessionId, $0.snippet) },
+                        uniquingKeysWith: { first, _ in first }
+                    )
+                } else {
+                    if !self.searchSnippets.isEmpty {
+                        self.searchSnippets = [:]
+                    }
+                }
+            }
     }
 
     var recentSessions: [Session] {
@@ -52,12 +86,34 @@ final class SessionViewModel: ObservableObject {
 
     var filteredSessions: [Session] {
         if searchText.isEmpty { return store.sessions }
-        let query = searchText.lowercased()
-        return store.sessions.filter { session in
-            session.displayName.lowercased().contains(query) ||
-            session.id.lowercased().contains(query) ||
-            (store.quickStats[session.id]?.topic?.lowercased().contains(query) == true)
+
+        // 1. Metadata matches (name, topic, id)
+        var matchedIds = Set<String>()
+        var result: [Session] = []
+
+        for session in store.sessions {
+            if SearchUtils.textMatches(query: searchText, in: session.displayName) ||
+                SearchUtils.textMatches(query: searchText, in: session.id) ||
+                SearchUtils.textMatches(query: searchText, in: store.quickStats[session.id]?.topic ?? "") ||
+                SearchUtils.textMatches(query: searchText, in: store.quickStats[session.id]?.sessionName ?? "")
+            {
+                result.append(session)
+                matchedIds.insert(session.id)
+            }
         }
+
+        // 2. Include FTS content matches (snippets populated by Combine pipeline)
+        if !searchSnippets.isEmpty {
+            let sessionLookup = Dictionary(uniqueKeysWithValues: store.sessions.map { ($0.id, $0) })
+            for sessionId in searchSnippets.keys {
+                if !matchedIds.contains(sessionId), let session = sessionLookup[sessionId] {
+                    result.append(session)
+                    matchedIds.insert(sessionId)
+                }
+            }
+        }
+
+        return result
     }
 
     var projectGroups: [ProjectGroup] {
@@ -97,13 +153,37 @@ final class SessionViewModel: ObservableObject {
         }
     }
 
+    func openTranscript(for session: Session, searchQuery: String? = nil, snippetContext: String? = nil) {
+        // Track if entered from list (selectedSession was nil) or from detail
+        transcriptEnteredFromList = (selectedSession == nil || selectedSessionStats == nil)
+        selectedSession = session
+        transcriptSearchQuery = searchQuery
+        transcriptSnippetContext = snippetContext
+        showTranscript = true
+    }
+
+    func closeTranscript() {
+        showTranscript = false
+        transcriptSearchQuery = nil
+        transcriptSnippetContext = nil
+        transcriptSearchText = ""
+        transcriptMatchIndex = 0
+        transcriptInitialLoadDone = false
+        if transcriptEnteredFromList {
+            selectedSession = nil
+            selectedSessionStats = nil
+        }
+        transcriptEnteredFromList = false
+    }
+
     func loadStats(for session: Session) {
         isLoadingStats = true
         selectedSessionStats = nil
 
-        Task.detached { [weak self] in
-            let stats = TranscriptParser.shared.parseSession(at: session.filePath)
-            await MainActor.run {
+        let path = session.filePath
+        Task.detached {
+            let stats = TranscriptParser.shared.parseSession(at: path)
+            await MainActor.run { [weak self] in
                 self?.selectedSessionStats = stats
                 self?.isLoadingStats = false
             }

@@ -15,10 +15,10 @@ final class SessionDataStore: ObservableObject {
 
     // MARK: - Internal state
 
-    private var fileFingerprints: [String: FileFingerprint] = [:]
     private var dirtySessionIds: Set<String> = []
     private var isPopoverVisible = false
     private var watcher: FSEventsWatcher?
+    private let db = DatabaseService.shared
     private let parseQueue: OperationQueue = {
         let q = OperationQueue()
         q.maxConcurrentOperationCount = 1
@@ -27,14 +27,11 @@ final class SessionDataStore: ObservableObject {
         return q
     }()
 
-    struct FileFingerprint {
-        let size: Int64
-        let mtime: Date
-    }
-
     // MARK: - Lifecycle
 
     func start() {
+        db.open()
+
         let projectsDir = (CredentialService.shared.claudeConfigDir() as NSString).appendingPathComponent("projects")
         watcher = FSEventsWatcher(path: projectsDir, debounceSeconds: 2.0) { [weak self] changedPaths in
             Task { @MainActor [weak self] in
@@ -48,6 +45,7 @@ final class SessionDataStore: ObservableObject {
     func stop() {
         watcher?.stop()
         parseQueue.cancelAllOperations()
+        db.close()
     }
 
     // MARK: - Popover visibility
@@ -69,35 +67,71 @@ final class SessionDataStore: ObservableObject {
         parseProgress = "Scanning sessions..."
 
         Task.detached { [weak self] in
+            guard let self else { return }
+            let db = self.db
             let scannedSessions = SessionScanner.shared.scanSessions()
             DiagnosticLogger.shared.appLaunched(sessionCount: scannedSessions.count)
 
-            await MainActor.run {
-                guard let self else { return }
-                self.sessions = scannedSessions
-                self.buildFingerprints()
-                self.parseProgress = "Loading quick stats..."
-            }
-
-            // Quick parse all sessions
+            // Load DB cache and determine which sessions need reparsing
+            let cache = db.loadAllCached()
+            var dirtyIds: [Session] = []
             var quickMap: [String: TranscriptParser.QuickStats] = [:]
+            var statsMap: [String: SessionStats] = [:]
+
             for session in scannedSessions {
-                quickMap[session.id] = TranscriptParser.shared.parseSessionQuick(at: session.filePath)
+                if db.needsReparse(sessionId: session.id, fileSize: session.fileSize, mtime: session.lastModified, cache: cache) {
+                    dirtyIds.append(session)
+                } else if let cached = cache[session.id] {
+                    if let q = cached.quickStats { quickMap[session.id] = q }
+                    if let s = cached.sessionStats { statsMap[session.id] = s }
+                }
             }
 
             await MainActor.run {
-                guard let self else { return }
+                self.sessions = scannedSessions
                 self.quickStats = quickMap
-                self.parseProgress = "Parsing details..."
+                self.parsedStats = statsMap
+                if !statsMap.isEmpty { self.rebucket() }
+                self.parseProgress = dirtyIds.isEmpty ? nil : "Loading..."
             }
 
-            // Full parse all sessions (serial, one at a time)
-            let total = scannedSessions.count
-            for (i, session) in scannedSessions.enumerated() {
-                let stats = TranscriptParser.shared.parseSession(at: session.filePath)
+            if dirtyIds.isEmpty {
+                // Clean up DB entries for deleted sessions
+                let currentIds = Set(scannedSessions.map(\.id))
+                let staleIds = Set(cache.keys).subtracting(currentIds)
+                if !staleIds.isEmpty { db.removeSessions(staleIds) }
 
                 await MainActor.run {
-                    guard let self else { return }
+                    self.isFullParseComplete = true
+                    self.parseProgress = nil
+                    let totalMsgs = self.parsedStats.values.reduce(0) { $0 + $1.messageCount }
+                    let totalToks = self.parsedStats.values.reduce(0) { $0 + $1.totalTokens }
+                    DiagnosticLogger.shared.parsePhaseComplete(
+                        totalSessions: self.parsedStats.count,
+                        totalMessages: totalMsgs,
+                        totalTokens: totalToks
+                    )
+                }
+                return
+            }
+
+            // Quick parse dirty sessions
+            for session in dirtyIds {
+                let quick = TranscriptParser.shared.parseSessionQuick(at: session.filePath)
+                db.saveQuickStats(sessionId: session.id, fileSize: session.fileSize, mtime: session.lastModified, stats: quick)
+                await MainActor.run {
+                    self.quickStats[session.id] = quick
+                }
+            }
+
+            // Full parse + index dirty sessions
+            let total = dirtyIds.count
+            for (i, session) in dirtyIds.enumerated() {
+                let stats = TranscriptParser.shared.parseSession(at: session.filePath)
+                db.saveSessionStats(sessionId: session.id, stats: stats)
+                db.indexSession(sessionId: session.id, filePath: session.filePath)
+
+                await MainActor.run {
                     self.parsedStats[session.id] = stats
                     if (i + 1) % 20 == 0 || i == total - 1 {
                         self.parseProgress = "Parsing \(i + 1)/\(total)..."
@@ -106,8 +140,12 @@ final class SessionDataStore: ObservableObject {
                 }
             }
 
+            // Clean up DB entries for deleted sessions
+            let currentIds = Set(scannedSessions.map(\.id))
+            let staleIds = Set(cache.keys).subtracting(currentIds)
+            if !staleIds.isEmpty { db.removeSessions(staleIds) }
+
             await MainActor.run {
-                guard let self else { return }
                 self.rebucket()
                 self.isFullParseComplete = true
                 self.parseProgress = nil
@@ -126,30 +164,12 @@ final class SessionDataStore: ObservableObject {
     // MARK: - File change handling
 
     private func handleFileChanges(_ changedPaths: Set<String>) {
-        // Map file paths to session ids and detect actual changes
         var changedIds: Set<String> = []
 
         for path in changedPaths {
             let fileName = (path as NSString).lastPathComponent
             guard fileName.hasSuffix(".jsonl") else { continue }
-            let sessionId = (fileName as NSString).deletingPathExtension
-
-            let fm = FileManager.default
-            guard let attrs = try? fm.attributesOfItem(atPath: path) else {
-                // File deleted — will handle in rescan
-                changedIds.insert(sessionId)
-                continue
-            }
-
-            let newSize = attrs[.size] as? Int64 ?? 0
-            let newMtime = attrs[.modificationDate] as? Date ?? Date.distantPast
-
-            if let existing = fileFingerprints[sessionId] {
-                if existing.size == newSize && existing.mtime == newMtime {
-                    continue // No actual change
-                }
-            }
-            changedIds.insert(sessionId)
+            changedIds.insert((fileName as NSString).deletingPathExtension)
         }
 
         guard !changedIds.isEmpty else { return }
@@ -171,36 +191,32 @@ final class SessionDataStore: ObservableObject {
 
     private func processDirtyIds(_ ids: Set<String>) {
         Task.detached { [weak self] in
+            guard let self else { return }
+            let db = self.db
+
             // Rescan to pick up new/deleted files
             let scannedSessions = SessionScanner.shared.scanSessions()
 
             await MainActor.run {
-                guard let self else { return }
                 self.sessions = scannedSessions
-                self.buildFingerprints()
                 self.cleanupDeletedSessions(current: scannedSessions)
             }
 
-            // Quick-parse changed sessions
-            for session in scannedSessions where ids.contains(session.id) {
+            let dirtySessions = scannedSessions.filter { ids.contains($0.id) }
+
+            // Quick-parse + full-parse + index changed sessions
+            for session in dirtySessions {
                 let quick = TranscriptParser.shared.parseSessionQuick(at: session.filePath)
-                await MainActor.run {
-                    self?.quickStats[session.id] = quick
-                }
-            }
+                db.saveQuickStats(sessionId: session.id, fileSize: session.fileSize, mtime: session.lastModified, stats: quick)
+                await MainActor.run { self.quickStats[session.id] = quick }
 
-            // Full-parse changed sessions
-            for session in scannedSessions where ids.contains(session.id) {
                 let stats = TranscriptParser.shared.parseSession(at: session.filePath)
-                await MainActor.run {
-                    guard let self else { return }
-                    self.parsedStats[session.id] = stats
-                }
+                db.saveSessionStats(sessionId: session.id, stats: stats)
+                db.indexSession(sessionId: session.id, filePath: session.filePath)
+                await MainActor.run { self.parsedStats[session.id] = stats }
             }
 
-            await MainActor.run {
-                self?.rebucket()
-            }
+            await MainActor.run { self.rebucket() }
         }
     }
 
@@ -261,8 +277,8 @@ final class SessionDataStore: ObservableObject {
         for id in ids {
             quickStats.removeValue(forKey: id)
             parsedStats.removeValue(forKey: id)
-            fileFingerprints.removeValue(forKey: id)
         }
+        db.removeSessions(ids)
         rebucket()
     }
 
@@ -276,29 +292,28 @@ final class SessionDataStore: ObservableObject {
         dirtySessionIds.removeAll()
         parseQueue.cancelAllOperations()
         isFullParseComplete = false
+        db.resetDatabase()
+        quickStats.removeAll()
+        parsedStats.removeAll()
         initialLoad()
     }
 
     // MARK: - Helpers
 
-    private func buildFingerprints() {
-        fileFingerprints.removeAll()
-        for session in sessions {
-            fileFingerprints[session.id] = FileFingerprint(
-                size: session.fileSize,
-                mtime: session.lastModified
-            )
-        }
-    }
-
     private func cleanupDeletedSessions(current: [Session]) {
         let currentIds = Set(current.map(\.id))
         let staleIds = Set(parsedStats.keys).subtracting(currentIds)
+        if staleIds.isEmpty { return }
         for id in staleIds {
             parsedStats.removeValue(forKey: id)
             quickStats.removeValue(forKey: id)
-            fileFingerprints.removeValue(forKey: id)
         }
+        db.removeSessions(staleIds)
+    }
+
+    /// Search messages via FTS index
+    func searchMessages(query: String) -> [DatabaseService.SearchResult] {
+        db.search(query: query)
     }
 
     // MARK: - Computed (convenience for views)
