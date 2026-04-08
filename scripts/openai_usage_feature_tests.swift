@@ -243,6 +243,31 @@ func runOpenAIUsageViewModelTests() async {
     expect(fallbackVM.errorMessage == "boom", "Expected failed forceRefresh to preserve the service error")
     expect(fallbackVM.hasDisplayableUsage, "Expected cached fallback data to remain displayable")
 
+    let recoveringFake = FakeOpenAIUsageService(
+        authState: OpenAIAuthState(
+            status: .notFound,
+            accountId: nil,
+            accountEmail: nil,
+            accessToken: nil,
+            refreshToken: nil,
+            idToken: nil
+        )
+    )
+    let recoveringVM = OpenAIUsageViewModel(service: recoveringFake)
+
+    recoveringVM.setup()
+    expect(recoveringVM.authState.status == .notFound, "Expected initial setup to reflect missing auth")
+    expect(!recoveringVM.isConfigured, "Expected missing auth to start unconfigured")
+
+    recoveringFake.authState = configuredAuthState()
+    recoveringFake.fetchResult = .success(refreshed)
+    await recoveringVM.forceRefresh()
+
+    expect(recoveringVM.authState.status == .configured, "Expected forceRefresh to resync auth state from the service")
+    expect(recoveringVM.isConfigured, "Expected forceRefresh to transition the VM to configured")
+    expect(recoveringVM.usageData == refreshed, "Expected recovered auth to allow a successful fetch")
+    expect(recoveringFake.fetchCallCount == 1, "Expected recovered auth to trigger a fetch")
+
     let states: [OpenAIAuthStatus] = [.notFound, .unsupportedMode, .invalidAuth]
     for state in states {
         let authFake = FakeOpenAIUsageService(

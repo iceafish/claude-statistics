@@ -116,8 +116,11 @@ final class OpenAIUsageViewModel: ObservableObject {
     }
 
     private func fetchUsage(clearError: Bool) async {
+        syncAuthState()
+
         guard authState.isConfigured else {
             errorMessage = OpenAIUsageError.notConfigured(authState.status).localizedDescription
+            stopAutoRefresh()
             return
         }
 
@@ -138,7 +141,15 @@ final class OpenAIUsageViewModel: ObservableObject {
             }
         }
 
+        syncAuthState()
         isLoading = false
+    }
+
+    private func syncAuthState() {
+        authState = service.authState
+        if !authState.isConfigured {
+            stopAutoRefresh()
+        }
     }
 
     private func countdownString(for date: Date?) -> String? {
