@@ -78,11 +78,11 @@ func runOpenAIUsageMappingTests() throws {
         "rate_limit": [
             "primary_window": [
                 "used_percent": 31.8,
-                "reset_at": "2026-04-08T15:00:00Z"
+                "reset_at": 1_766_664_000
             ],
             "secondary_window": [
                 "used_percent": 64.2,
-                "reset_at": "2026-04-15T00:00:00Z"
+                "reset_at": 1_767_187_200
             ]
         ],
         "plan_type": "plus"
@@ -93,12 +93,12 @@ func runOpenAIUsageMappingTests() throws {
 
     expect(usage?.currentWindow?.utilization == 31.8, "Expected primary_window.used_percent to map to currentWindow.utilization")
     expect(
-        usage?.currentWindow?.resetAt == isoDate("2026-04-08T15:00:00Z"),
+        usage?.currentWindow?.resetAt == Date(timeIntervalSince1970: 1_766_664_000),
         "Expected primary_window.reset_at to map to currentWindow.resetAt"
     )
     expect(usage?.weeklyWindow?.utilization == 64.2, "Expected secondary_window.used_percent to map to weeklyWindow.utilization")
     expect(
-        usage?.weeklyWindow?.resetAt == isoDate("2026-04-15T00:00:00Z"),
+        usage?.weeklyWindow?.resetAt == Date(timeIntervalSince1970: 1_767_187_200),
         "Expected secondary_window.reset_at to map to weeklyWindow.resetAt"
     )
     expect(usage?.planType == "plus", "Expected plan_type to be preserved")

@@ -88,4 +88,43 @@ private struct OpenAIUsageWindowResponse: Codable {
         case usedPercent = "used_percent"
         case resetAt = "reset_at"
     }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        usedPercent = try container.decodeIfPresent(Double.self, forKey: .usedPercent)
+        resetAt = try container.decodeIfPresent(OpenAIResetAt.self, forKey: .resetAt)?.dateValue
+    }
+}
+
+private struct OpenAIResetAt: Decodable {
+    let dateValue: Date
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+
+        if let seconds = try? container.decode(Double.self) {
+            dateValue = Date(timeIntervalSince1970: OpenAIResetAt.normalizedEpoch(seconds))
+            return
+        }
+
+        if let string = try? container.decode(String.self) {
+            if let date = OpenAIUsageData.iso8601Date(from: string) {
+                dateValue = date
+                return
+            }
+            if let seconds = Double(string) {
+                dateValue = Date(timeIntervalSince1970: OpenAIResetAt.normalizedEpoch(seconds))
+                return
+            }
+        }
+
+        throw DecodingError.dataCorruptedError(
+            in: container,
+            debugDescription: "Expected numeric epoch or ISO8601 date for reset_at"
+        )
+    }
+
+    private static func normalizedEpoch(_ value: Double) -> TimeInterval {
+        value > 10_000_000_000 ? value / 1_000 : value
+    }
 }
