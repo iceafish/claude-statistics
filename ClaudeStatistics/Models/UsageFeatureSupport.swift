@@ -3,22 +3,27 @@ import Foundation
 enum UsageSection: String, Equatable {
     case claude
     case zai
+    case openAI
 }
 
 enum UsageContentOrder {
-    static func sections(claudeHasDisplayableUsage: Bool, zaiEnabled: Bool, zaiConfigured: Bool) -> [UsageSection] {
-        guard zaiEnabled else {
+    static func sections(
+        claudeHasDisplayableUsage: Bool,
+        zaiEnabled: Bool,
+        zaiConfigured: Bool,
+        openAIEnabled: Bool = false,
+        openAIConfigured: Bool = false
+    ) -> [UsageSection] {
+        let secondarySections: [UsageSection] = [
+            zaiEnabled && zaiConfigured ? .zai : nil,
+            openAIEnabled && openAIConfigured ? .openAI : nil
+        ].compactMap { $0 }
+
+        guard !secondarySections.isEmpty else {
             return [.claude]
         }
 
-        switch (claudeHasDisplayableUsage, zaiConfigured) {
-        case (false, true):
-            return [.zai, .claude]
-        case (_, true):
-            return [.claude, .zai]
-        default:
-            return [.claude]
-        }
+        return claudeHasDisplayableUsage ? [.claude] + secondarySections : secondarySections + [.claude]
     }
 }
 

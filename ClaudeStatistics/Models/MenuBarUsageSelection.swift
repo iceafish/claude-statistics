@@ -6,20 +6,56 @@ enum ClaudeAuthMode: Equatable {
     case unknown
 }
 
+enum MenuBarUsageColorRole: Equatable {
+    case green
+    case warning
+    case critical
+}
+
 struct MenuBarUsageItem: Equatable {
     let providerLabel: String
     let percentText: String
+    let colorRole: MenuBarUsageColorRole
 }
 
 enum MenuBarUsageSelection {
+    static func text(
+        claudeFiveHourPercent: Double?,
+        zaiFiveHourPercent: Double?,
+        zaiEnabled: Bool,
+        authMode: ClaudeAuthMode
+    ) -> String? {
+        let claudeValid = claudeFiveHourPercent != nil
+        let zaiValid = zaiEnabled && zaiFiveHourPercent != nil
+
+        switch (claudeValid, zaiValid) {
+        case (false, false):
+            return nil
+        case (true, false):
+            return format(claudeFiveHourPercent)
+        case (false, true):
+            return format(zaiFiveHourPercent)
+        case (true, true):
+            switch authMode {
+            case .apiKey:
+                return format(zaiFiveHourPercent)
+            case .oauth, .unknown:
+                return format(claudeFiveHourPercent)
+            }
+        }
+    }
+
     static func items(
         claudeFiveHourPercent: Double?,
         zaiFiveHourPercent: Double?,
-        zaiEnabled: Bool
+        openAIFiveHourPercent: Double?,
+        zaiEnabled: Bool,
+        openAIEnabled: Bool
     ) -> [MenuBarUsageItem] {
-        [
+        return [
             item(providerLabel: "C", percent: claudeFiveHourPercent),
-            zaiEnabled ? item(providerLabel: "Z", percent: zaiFiveHourPercent) : nil
+            zaiEnabled ? item(providerLabel: "Z", percent: zaiFiveHourPercent) : nil,
+            openAIEnabled ? item(providerLabel: "O", percent: openAIFiveHourPercent) : nil
         ].compactMap { $0 }
     }
 
@@ -30,11 +66,28 @@ enum MenuBarUsageSelection {
             .joined(separator: " ")
     }
 
+    static func colorRole(forUsedPercent usedPercent: Double) -> MenuBarUsageColorRole {
+        switch usedPercent {
+        case ..<70:
+            return .green
+        case 70..<90:
+            return .warning
+        default:
+            return .critical
+        }
+    }
+
     private static func item(providerLabel: String, percent: Double?) -> MenuBarUsageItem? {
         guard let percent else { return nil }
         return MenuBarUsageItem(
             providerLabel: providerLabel,
-            percentText: "\(Int(percent))%"
+            percentText: "\(Int(percent))%",
+            colorRole: colorRole(forUsedPercent: percent)
         )
+    }
+
+    private static func format(_ percent: Double?) -> String? {
+        guard let percent else { return nil }
+        return "\(Int(percent))%"
     }
 }

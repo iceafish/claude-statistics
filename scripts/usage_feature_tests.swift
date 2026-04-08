@@ -28,6 +28,18 @@ func runUsageContentOrderTests() {
     )
     expect(prioritized == [.zai, .claude], "Expected Z.ai to be shown first when Claude usage is invalid")
 
+    let openAIPrioritized = UsageContentOrder.sections(
+        claudeHasDisplayableUsage: false,
+        zaiEnabled: true,
+        zaiConfigured: true,
+        openAIEnabled: true,
+        openAIConfigured: true
+    )
+    expect(
+        openAIPrioritized == [.zai, .openAI, .claude],
+        "Expected Z.ai, OpenAI, then Claude when Claude is unavailable but the other providers are available"
+    )
+
     let defaultOrder = UsageContentOrder.sections(
         claudeHasDisplayableUsage: true,
         zaiEnabled: true,
@@ -176,6 +188,40 @@ func runMenuBarUsageSelectionTests() {
     expect(
         disabledZaiItems.map(\.providerLabel) == ["C"],
         "Expected disabled Z.ai to be ignored in compact menu items"
+    )
+
+    let compactItems = MenuBarUsageSelection.items(
+        claudeFiveHourPercent: 42.9,
+        zaiFiveHourPercent: 64.2,
+        openAIFiveHourPercent: 31.8,
+        zaiEnabled: true,
+        openAIEnabled: true,
+        authMode: .oauth
+    )
+    expect(
+        compactItems.map(\.providerLabel) == ["C", "Z", "O"],
+        "Expected compact menu items to keep Claude, Z.ai, OpenAI ordering"
+    )
+    expect(
+        compactItems.map(\.percentText) == ["42%", "64%", "31%"],
+        "Expected compact menu items to truncate percentages with Int(percent)"
+    )
+    expect(
+        MenuBarUsageSelection.compactText(from: compactItems) == "C 42% Z 64% O 31%",
+        "Expected compact menu text to flatten provider labels and percentages"
+    )
+
+    expect(
+        MenuBarUsageSelection.colorRole(forUsedPercent: 69) == .green,
+        "Expected 69 used percent to remain green"
+    )
+    expect(
+        MenuBarUsageSelection.colorRole(forUsedPercent: 70) == .warning,
+        "Expected 70 used percent to switch to warning"
+    )
+    expect(
+        MenuBarUsageSelection.colorRole(forUsedPercent: 90) == .critical,
+        "Expected 90 used percent to switch to critical"
     )
 }
 
