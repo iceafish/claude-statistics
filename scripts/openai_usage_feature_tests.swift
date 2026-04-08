@@ -31,7 +31,7 @@ func jwt(payload: [String: Any]) throws -> String {
 
 func runOpenAIAuthParsingTests() throws {
     let token = try jwt(payload: [
-        "email": "user@example.com"
+        "preferred_username": "user@example.com"
     ])
 
     let json: [String: Any] = [
@@ -49,12 +49,16 @@ func runOpenAIAuthParsingTests() throws {
     let data = try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])
     let state = OpenAICredentialService.decodeAuthState(from: data, now: isoDate("2026-04-08T10:00:00Z"))
 
-    expect(state?.configured == true, "Expected chatgpt auth to be treated as configured")
-    expect(state?.accountId == "acct_789", "Expected account_id to be decoded from auth.json")
-    expect(state?.accountEmail == "user@example.com", "Expected email to be decoded from the JWT payload")
-    expect(state?.accessToken == "access-123", "Expected access token to be preserved")
-    expect(state?.refreshToken == "refresh-456", "Expected refresh token to be preserved")
-    expect(state?.idToken == token, "Expected id token to be preserved")
+    expect(state.status == .configured, "Expected chatgpt auth to be treated as configured")
+    expect(state.isConfigured, "Expected configured auth to report isConfigured")
+    expect(state.accountId == "acct_789", "Expected account_id to be decoded from auth.json")
+    expect(
+        state.accountEmail == "user@example.com",
+        "Expected account_email to fall back to preferred_username when email is absent"
+    )
+    expect(state.accessToken == "access-123", "Expected access token to be preserved")
+    expect(state.refreshToken == "refresh-456", "Expected refresh token to be preserved")
+    expect(state.idToken == token, "Expected id token to be preserved")
 
     let apiKeyJSON: [String: Any] = [
         "auth_mode": "api_key",
@@ -68,41 +72,71 @@ func runOpenAIAuthParsingTests() throws {
 
     let apiKeyData = try JSONSerialization.data(withJSONObject: apiKeyJSON, options: [.sortedKeys])
     expect(
-        OpenAICredentialService.decodeAuthState(from: apiKeyData, now: isoDate("2026-04-08T10:00:00Z")) == nil,
-        "Expected api_key auth mode to be rejected"
+        OpenAICredentialService.decodeAuthState(from: apiKeyData, now: isoDate("2026-04-08T10:00:00Z")).status == .unsupportedMode,
+        "Expected api_key auth mode to be rejected as unsupported"
+    )
+
+    let invalidJSON: [String: Any] = [
+        "auth_mode": "chatgpt",
+        "tokens": [
+            "refresh_token": "refresh-456",
+            "id_token": token,
+            "account_id": "acct_789"
+        ]
+    ]
+
+    let invalidData = try JSONSerialization.data(withJSONObject: invalidJSON, options: [.sortedKeys])
+    expect(
+        OpenAICredentialService.decodeAuthState(from: invalidData, now: isoDate("2026-04-08T10:00:00Z")).status == .invalidAuth,
+        "Expected missing access token payload to be rejected as invalid"
+    )
+
+    let missingURL = URL(fileURLWithPath: "/tmp/openai-auth-missing-\(UUID().uuidString).json")
+    expect(
+        OpenAICredentialService.shared.loadAuthState(from: missingURL).status == .notFound,
+        "Expected missing auth file to report notFound"
     )
 }
 
 func runOpenAIUsageMappingTests() throws {
-    let json: [String: Any] = [
-        "rate_limit": [
-            "primary_window": [
-                "used_percent": 31.8,
-                "reset_at": 1_766_664_000
-            ],
-            "secondary_window": [
-                "used_percent": 64.2,
-                "reset_at": 1_767_187_200
-            ]
-        ],
-        "plan_type": "plus"
+    let cases: [(resetAt: Any, expected: Date)] = [
+        (1_766_664_000, Date(timeIntervalSince1970: 1_766_664_000)),
+        (1_766_664_000_000, Date(timeIntervalSince1970: 1_766_664_000)),
+        ("1766664000", Date(timeIntervalSince1970: 1_766_664_000)),
+        ("2026-04-08T15:00:00Z", isoDate("2026-04-08T15:00:00Z"))
     ]
 
-    let data = try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])
-    let usage = OpenAIUsageData.decodeUsageResponse(from: data, accountEmail: "user@example.com")
+    for (index, entry) in cases.enumerated() {
+        let json: [String: Any] = [
+            "rate_limit": [
+                "primary_window": [
+                    "used_percent": 31.8,
+                    "reset_at": entry.resetAt
+                ],
+                "secondary_window": [
+                    "used_percent": 64.2,
+                    "reset_at": entry.resetAt
+                ]
+            ],
+            "plan_type": "plus"
+        ]
 
-    expect(usage?.currentWindow?.utilization == 31.8, "Expected primary_window.used_percent to map to currentWindow.utilization")
-    expect(
-        usage?.currentWindow?.resetAt == Date(timeIntervalSince1970: 1_766_664_000),
-        "Expected primary_window.reset_at to map to currentWindow.resetAt"
-    )
-    expect(usage?.weeklyWindow?.utilization == 64.2, "Expected secondary_window.used_percent to map to weeklyWindow.utilization")
-    expect(
-        usage?.weeklyWindow?.resetAt == Date(timeIntervalSince1970: 1_767_187_200),
-        "Expected secondary_window.reset_at to map to weeklyWindow.resetAt"
-    )
-    expect(usage?.planType == "plus", "Expected plan_type to be preserved")
-    expect(usage?.accountEmail == "user@example.com", "Expected accountEmail to be attached during mapping")
+        let data = try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])
+        let usage = OpenAIUsageData.decodeUsageResponse(from: data, accountEmail: "user@example.com")
+
+        expect(usage?.currentWindow?.utilization == 31.8, "Expected primary_window.used_percent to map to currentWindow.utilization (case \(index))")
+        expect(
+            usage?.currentWindow?.resetAt == entry.expected,
+            "Expected primary_window.reset_at to map to currentWindow.resetAt (case \(index))"
+        )
+        expect(usage?.weeklyWindow?.utilization == 64.2, "Expected secondary_window.used_percent to map to weeklyWindow.utilization (case \(index))")
+        expect(
+            usage?.weeklyWindow?.resetAt == entry.expected,
+            "Expected secondary_window.reset_at to map to weeklyWindow.resetAt (case \(index))"
+        )
+        expect(usage?.planType == "plus", "Expected plan_type to be preserved (case \(index))")
+        expect(usage?.accountEmail == "user@example.com", "Expected accountEmail to be attached during mapping (case \(index))")
+    }
 }
 
 @main
