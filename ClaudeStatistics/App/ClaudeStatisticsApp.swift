@@ -35,25 +35,17 @@ struct MenuBarLabel: View {
     @AppStorage("openAIUsageEnabled") private var openAIUsageEnabled = false
 
     var body: some View {
-        HStack(spacing: 3) {
-            if menuBarItems.isEmpty {
-                Text("--")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.secondary)
-            } else {
-                HStack(spacing: 4) {
-                    ForEach(Array(menuBarItems.enumerated()), id: \.offset) { _, item in
-                        HStack(spacing: 2) {
-                            Text(item.providerLabel)
-                                .font(.system(size: 9, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.secondary)
-                            Text(item.percentText)
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .foregroundStyle(color(for: item.colorRole))
-                        }
-                    }
-                }
-            }
+        if menuBarItems.isEmpty {
+            Text("--")
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .fixedSize()
+        } else {
+            // MenuBarExtra labels reliably render a single Text view; nested stacks
+            // can collapse down to only the first segment in the status bar.
+            menuBarDisplayText
+                .lineLimit(1)
+                .fixedSize()
         }
     }
 
@@ -75,6 +67,22 @@ struct MenuBarLabel: View {
             return .orange
         case .critical:
             return .red
+        }
+    }
+
+    private var menuBarDisplayText: Text {
+        menuBarItems.enumerated().reduce(Text("")) { partial, entry in
+            let (index, item) = entry
+            let spacing = index == 0 ? Text("") : Text(" ")
+            return partial
+                + spacing
+                + Text(item.providerLabel)
+                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                    .foregroundColor(.secondary)
+                + Text(" ")
+                + Text(item.percentText)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(color(for: item.colorRole))
         }
     }
 }
