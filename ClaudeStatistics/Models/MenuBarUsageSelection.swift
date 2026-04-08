@@ -6,35 +6,35 @@ enum ClaudeAuthMode: Equatable {
     case unknown
 }
 
+struct MenuBarUsageItem: Equatable {
+    let providerLabel: String
+    let percentText: String
+}
+
 enum MenuBarUsageSelection {
-    static func text(
+    static func items(
         claudeFiveHourPercent: Double?,
         zaiFiveHourPercent: Double?,
-        zaiEnabled: Bool,
-        authMode: ClaudeAuthMode
-    ) -> String? {
-        let claudeValid = claudeFiveHourPercent != nil
-        let zaiValid = zaiEnabled && zaiFiveHourPercent != nil
-
-        switch (claudeValid, zaiValid) {
-        case (false, false):
-            return nil
-        case (true, false):
-            return format(claudeFiveHourPercent)
-        case (false, true):
-            return format(zaiFiveHourPercent)
-        case (true, true):
-            switch authMode {
-            case .apiKey:
-                return format(zaiFiveHourPercent)
-            case .oauth, .unknown:
-                return format(claudeFiveHourPercent)
-            }
-        }
+        zaiEnabled: Bool
+    ) -> [MenuBarUsageItem] {
+        [
+            item(providerLabel: "C", percent: claudeFiveHourPercent),
+            zaiEnabled ? item(providerLabel: "Z", percent: zaiFiveHourPercent) : nil
+        ].compactMap { $0 }
     }
 
-    private static func format(_ percent: Double?) -> String? {
+    static func compactText(from items: [MenuBarUsageItem]) -> String? {
+        guard !items.isEmpty else { return nil }
+        return items
+            .flatMap { [$0.providerLabel, $0.percentText] }
+            .joined(separator: " ")
+    }
+
+    private static func item(providerLabel: String, percent: Double?) -> MenuBarUsageItem? {
         guard let percent else { return nil }
-        return "\(Int(percent))%"
+        return MenuBarUsageItem(
+            providerLabel: providerLabel,
+            percentText: "\(Int(percent))%"
+        )
     }
 }

@@ -111,64 +111,71 @@ func runZaiModelUsageAggregationTests() {
 }
 
 func runMenuBarUsageSelectionTests() {
+    let emptyItems = MenuBarUsageSelection.items(
+        claudeFiveHourPercent: nil,
+        zaiFiveHourPercent: nil,
+        zaiEnabled: true
+    )
+    expect(emptyItems.isEmpty, "Expected menu bar items to be empty when both providers are invalid")
     expect(
-        MenuBarUsageSelection.text(
-            claudeFiveHourPercent: nil,
-            zaiFiveHourPercent: nil,
-            zaiEnabled: true,
-            authMode: .oauth
-        ) == nil,
-        "Expected menu bar text to be hidden when both providers are invalid"
+        MenuBarUsageSelection.compactText(from: emptyItems) == nil,
+        "Expected compact menu bar text to be hidden when both providers are invalid"
     )
 
+    let claudeOnlyItems = MenuBarUsageSelection.items(
+        claudeFiveHourPercent: 42.9,
+        zaiFiveHourPercent: nil,
+        zaiEnabled: true
+    )
     expect(
-        MenuBarUsageSelection.text(
-            claudeFiveHourPercent: 42.9,
-            zaiFiveHourPercent: nil,
-            zaiEnabled: true,
-            authMode: .apiKey
-        ) == "42%",
-        "Expected Claude percentage to be shown when only Claude is valid"
+        claudeOnlyItems.map(\.providerLabel) == ["C"],
+        "Expected Claude to appear when only Claude is valid"
+    )
+    expect(
+        MenuBarUsageSelection.compactText(from: claudeOnlyItems) == "C 42%",
+        "Expected compact text to show Claude when only Claude is valid"
     )
 
+    let zaiOnlyItems = MenuBarUsageSelection.items(
+        claudeFiveHourPercent: nil,
+        zaiFiveHourPercent: 64.2,
+        zaiEnabled: true
+    )
     expect(
-        MenuBarUsageSelection.text(
-            claudeFiveHourPercent: nil,
-            zaiFiveHourPercent: 64.2,
-            zaiEnabled: true,
-            authMode: .oauth
-        ) == "64%",
-        "Expected Z.ai percentage to be shown when only Z.ai is valid"
+        zaiOnlyItems.map(\.providerLabel) == ["Z"],
+        "Expected Z.ai to appear when only Z.ai is valid"
+    )
+    expect(
+        MenuBarUsageSelection.compactText(from: zaiOnlyItems) == "Z 64%",
+        "Expected compact text to show Z.ai when only Z.ai is valid"
     )
 
+    let combinedItems = MenuBarUsageSelection.items(
+        claudeFiveHourPercent: 42.9,
+        zaiFiveHourPercent: 64.2,
+        zaiEnabled: true
+    )
     expect(
-        MenuBarUsageSelection.text(
-            claudeFiveHourPercent: 42.9,
-            zaiFiveHourPercent: 64.2,
-            zaiEnabled: true,
-            authMode: .apiKey
-        ) == "64%",
-        "Expected api-key mode to prefer Z.ai when both providers are valid"
+        combinedItems.map(\.providerLabel) == ["C", "Z"],
+        "Expected compact menu items to preserve provider order"
+    )
+    expect(
+        combinedItems.map(\.percentText) == ["42%", "64%"],
+        "Expected compact menu items to format percentages"
+    )
+    expect(
+        MenuBarUsageSelection.compactText(from: combinedItems) == "C 42% Z 64%",
+        "Expected both provider states to appear in compact menu text"
     )
 
-    expect(
-        MenuBarUsageSelection.text(
-            claudeFiveHourPercent: 42.9,
-            zaiFiveHourPercent: 64.2,
-            zaiEnabled: true,
-            authMode: .oauth
-        ) == "42%",
-        "Expected oauth mode to prefer Claude when both providers are valid"
+    let disabledZaiItems = MenuBarUsageSelection.items(
+        claudeFiveHourPercent: 42.9,
+        zaiFiveHourPercent: 64.2,
+        zaiEnabled: false
     )
-
     expect(
-        MenuBarUsageSelection.text(
-            claudeFiveHourPercent: 42.9,
-            zaiFiveHourPercent: 64.2,
-            zaiEnabled: false,
-            authMode: .apiKey
-        ) == "42%",
-        "Expected disabled Z.ai to be ignored in menu bar selection"
+        disabledZaiItems.map(\.providerLabel) == ["C"],
+        "Expected disabled Z.ai to be ignored in compact menu items"
     )
 }
 

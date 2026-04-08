@@ -27,23 +27,16 @@ struct MenuBarLabel: View {
     @AppStorage("zaiUsageEnabled") private var zaiUsageEnabled = false
 
     var body: some View {
-        HStack(spacing: 3) {
-            Image("MenuBarIcon")
-                .renderingMode(.template)
-            if let text = menuBarText {
-                Text(text)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-            }
-        }
+        Text(menuBarText ?? "--")
+            .font(.system(size: 11, weight: .medium, design: .monospaced))
     }
 
     private var menuBarText: String? {
-        MenuBarUsageSelection.text(
+        MenuBarUsageSelection.compactText(from: MenuBarUsageSelection.items(
             claudeFiveHourPercent: usageViewModel.menuBarFiveHourPercent,
             zaiFiveHourPercent: zaiUsageViewModel.fiveHourPercent,
-            zaiEnabled: zaiUsageEnabled,
-            authMode: CredentialService.shared.currentAuthMode()
-        )
+            zaiEnabled: zaiUsageEnabled
+        ))
     }
 }
 
