@@ -139,11 +139,144 @@ func runOpenAIUsageMappingTests() throws {
     }
 }
 
+final class FakeOpenAIUsageService: OpenAIUsageServicing {
+    var authState: OpenAIAuthState
+    var cacheResponse: (data: OpenAIUsageData, fetchedAt: Date)?
+    var fetchResult: Result<OpenAIUsageData, Error> = .success(
+        OpenAIUsageData(
+            currentWindow: nil,
+            weeklyWindow: nil,
+            planType: nil,
+            accountEmail: nil
+        )
+    )
+    private(set) var fetchCallCount = 0
+
+    init(
+        authState: OpenAIAuthState,
+        cacheResponse: (data: OpenAIUsageData, fetchedAt: Date)? = nil
+    ) {
+        self.authState = authState
+        self.cacheResponse = cacheResponse
+    }
+
+    func loadCache() -> (data: OpenAIUsageData, fetchedAt: Date)? {
+        cacheResponse
+    }
+
+    func fetchUsage() async throws -> OpenAIUsageData {
+        fetchCallCount += 1
+        return try fetchResult.get()
+    }
+}
+
+func configuredAuthState() -> OpenAIAuthState {
+    OpenAIAuthState(
+        status: .configured,
+        accountId: "acct_789",
+        accountEmail: "user@example.com",
+        accessToken: "access-123",
+        refreshToken: "refresh-456",
+        idToken: "header.payload.signature"
+    )
+}
+
+@MainActor
+func runOpenAIUsageViewModelTests() async {
+    let cachedCurrentReset = Date().addingTimeInterval(90_000)
+    let cachedWeeklyReset = Date().addingTimeInterval(200_000)
+    let cached = OpenAIUsageData(
+        currentWindow: OpenAIUsageWindow(utilization: 31.8, resetAt: cachedCurrentReset),
+        weeklyWindow: OpenAIUsageWindow(utilization: 64.2, resetAt: cachedWeeklyReset),
+        planType: "plus",
+        accountEmail: "user@example.com"
+    )
+
+    let fake = FakeOpenAIUsageService(
+        authState: configuredAuthState(),
+        cacheResponse: (data: cached, fetchedAt: Date(timeIntervalSince1970: 1_700_000_000))
+    )
+    let vm = OpenAIUsageViewModel(service: fake)
+
+    vm.setup()
+
+    expect(vm.authState.status == .configured, "Expected setup to preserve configured auth state")
+    expect(vm.isConfigured, "Expected configured auth state to report isConfigured")
+    expect(vm.usageData == cached, "Expected setup to load cached usage")
+    expect(vm.currentWindowPercent == 31.8, "Expected currentWindowPercent to surface cached current usage")
+    expect(vm.weeklyPercent == 64.2, "Expected weeklyPercent to surface cached weekly usage")
+    expect(vm.currentWindowResetCountdown?.hasPrefix("1d") == true, "Expected currentWindowResetCountdown to be derived from cached reset date")
+    expect(vm.weeklyResetCountdown?.hasPrefix("2d") == true, "Expected weeklyResetCountdown to be derived from cached reset date")
+    expect(vm.hasDisplayableUsage, "Expected cached usage to be displayable")
+
+    let refreshed = OpenAIUsageData(
+        currentWindow: OpenAIUsageWindow(utilization: 12.5, resetAt: Date(timeIntervalSinceNow: 3700)),
+        weeklyWindow: OpenAIUsageWindow(utilization: 34.5, resetAt: Date(timeIntervalSinceNow: 5400)),
+        planType: "pro",
+        accountEmail: "user@example.com"
+    )
+
+    fake.fetchResult = .success(refreshed)
+    await vm.refresh()
+
+    expect(fake.fetchCallCount == 1, "Expected refresh to call through to the injected service")
+    expect(vm.usageData == refreshed, "Expected refresh to replace cached data with fetched data")
+    expect(vm.currentWindowPercent == 12.5, "Expected currentWindowPercent to reflect fetched data")
+    expect(vm.weeklyPercent == 34.5, "Expected weeklyPercent to reflect fetched data")
+    expect(vm.currentWindowResetCountdown?.hasPrefix("1h") == true, "Expected currentWindowResetCountdown to be derived from fetched data")
+    expect(vm.weeklyResetCountdown?.hasPrefix("1h") == true, "Expected weeklyResetCountdown to be derived from fetched data")
+
+    let fallbackFake = FakeOpenAIUsageService(
+        authState: configuredAuthState(),
+        cacheResponse: (data: cached, fetchedAt: Date(timeIntervalSince1970: 1_700_000_000))
+    )
+    fallbackFake.fetchResult = .failure(NSError(domain: "OpenAI", code: 500, userInfo: [
+        NSLocalizedDescriptionKey: "boom"
+    ]))
+    let fallbackVM = OpenAIUsageViewModel(service: fallbackFake)
+
+    fallbackVM.setup()
+    await fallbackVM.forceRefresh()
+
+    expect(fallbackFake.fetchCallCount == 1, "Expected forceRefresh to call through to the injected service")
+    expect(fallbackVM.usageData == cached, "Expected failed forceRefresh to retain cached data")
+    expect(fallbackVM.errorMessage == "boom", "Expected failed forceRefresh to preserve the service error")
+    expect(fallbackVM.hasDisplayableUsage, "Expected cached fallback data to remain displayable")
+
+    let states: [OpenAIAuthStatus] = [.notFound, .unsupportedMode, .invalidAuth]
+    for state in states {
+        let authFake = FakeOpenAIUsageService(
+            authState: OpenAIAuthState(
+                status: state,
+                accountId: nil,
+                accountEmail: nil,
+                accessToken: nil,
+                refreshToken: nil,
+                idToken: nil
+            )
+        )
+        let authVM = OpenAIUsageViewModel(service: authFake)
+        authVM.setup()
+
+        expect(authVM.authState.status == state, "Expected setup to preserve auth status \(state)")
+        expect(!authVM.isConfigured, "Expected \(state) auth status to be treated as not configured")
+        expect(authVM.hasDisplayableUsage == false, "Expected \(state) auth status to remain hidden without usage")
+        expect(authFake.fetchCallCount == 0, "Expected \(state) auth status to skip fetch attempts")
+    }
+}
+
 @main
 struct OpenAIUsageFeatureTestsRunner {
-    static func main() throws {
-        try runOpenAIAuthParsingTests()
-        try runOpenAIUsageMappingTests()
-        print("openai_usage_feature_tests passed")
+    @MainActor
+    static func main() async {
+        do {
+            try runOpenAIAuthParsingTests()
+            try runOpenAIUsageMappingTests()
+            await runOpenAIUsageViewModelTests()
+            print("openai_usage_feature_tests passed")
+        } catch {
+            fputs("FAIL: \(error)\n", stderr)
+            exit(1)
+        }
     }
 }

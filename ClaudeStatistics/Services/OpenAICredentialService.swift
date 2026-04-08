@@ -5,6 +5,19 @@ enum OpenAIAuthStatus: String, Codable, Equatable {
     case notFound
     case unsupportedMode
     case invalidAuth
+
+    var description: String {
+        switch self {
+        case .configured:
+            return "configured"
+        case .notFound:
+            return "not found"
+        case .unsupportedMode:
+            return "unsupported auth mode"
+        case .invalidAuth:
+            return "invalid auth"
+        }
+    }
 }
 
 struct OpenAIAuthState: Equatable {
@@ -42,6 +55,37 @@ final class OpenAICredentialService {
             )
         }
         return Self.decodeAuthState(from: data, now: Date())
+    }
+
+    func persistRefreshedTokens(
+        accessToken: String,
+        refreshToken: String?,
+        idToken: String?,
+        now: Date = Date()
+    ) throws {
+        let url = authFileURL()
+        guard let data = FileManager.default.contents(atPath: url.path) else {
+            throw OpenAICredentialError.missingAuthFile
+        }
+
+        guard var json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw OpenAICredentialError.invalidAuthFile
+        }
+
+        var tokens = json["tokens"] as? [String: Any] ?? [:]
+        tokens["access_token"] = accessToken
+        if let refreshToken {
+            tokens["refresh_token"] = refreshToken
+        }
+        if let idToken {
+            tokens["id_token"] = idToken
+        }
+
+        json["tokens"] = tokens
+        json["last_refresh"] = Self.iso8601String(from: now)
+
+        let output = try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys, .prettyPrinted])
+        try output.write(to: url, options: .atomic)
     }
 
     static func decodeAuthState(from data: Data, now: Date) -> OpenAIAuthState {
@@ -92,6 +136,12 @@ final class OpenAICredentialService {
         URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent(".codex", isDirectory: true)
             .appendingPathComponent("auth.json")
+    }
+
+    private static func iso8601String(from date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.string(from: date)
     }
 }
 
@@ -153,5 +203,19 @@ private extension OpenAICredentialService {
         }
 
         return Data(base64Encoded: base64)
+    }
+}
+
+enum OpenAICredentialError: LocalizedError {
+    case missingAuthFile
+    case invalidAuthFile
+
+    var errorDescription: String? {
+        switch self {
+        case .missingAuthFile:
+            return "OpenAI auth file not found"
+        case .invalidAuthFile:
+            return "OpenAI auth file is invalid"
+        }
     }
 }

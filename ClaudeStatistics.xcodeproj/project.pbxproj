@@ -11,6 +11,7 @@
 		05B7BCA2FB62A164EC5B0858 /* ZaiUsageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = F60AD35ACACA78BDCD7669D9 /* ZaiUsageData.swift */; };
 		0BD1DED6EC1DFF9326A1CAE5 /* ProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1850A208EA7AE5CDF9896207 /* ProfileViewModel.swift */; };
 		0C02DF47ADAEB84E12AA9305 /* UsageResetNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9A24B3CC86C595A16F3D4ED /* UsageResetNotificationService.swift */; };
+		11AF5803393ECD1CB964FE7D /* OpenAIUsageViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FDECD39A70AE505FBC38DEB /* OpenAIUsageViewModel.swift */; };
 		1D84A21259B5673F6ABDFCC1 /* Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F9BBB23CB057720EA99A7B /* Session.swift */; };
 		2243C4B9AB063FDA94DE5E4F /* OpenAIUsageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 767C851B0E765A9B6279A6FF /* OpenAIUsageData.swift */; };
 		2DA31EA7AF0FFF1572E257AC /* UsageFeatureSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2985E486A9910902706341F /* UsageFeatureSupport.swift */; };
@@ -43,6 +44,7 @@
 		D06D7B513EFFD60742C93431 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B5C4223D247CA4D681A19D53 /* Assets.xcassets */; };
 		D64171EFA61052FC0A315681 /* SessionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58B71B5593D63536AB462D70 /* SessionViewModel.swift */; };
 		E04B621B671D090DB9155348 /* LanguageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1519B833F38D44123500B58 /* LanguageManager.swift */; };
+		E09B487B5B16400C98D87D7B /* OpenAIUsageAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 869DD78512156D8353633381 /* OpenAIUsageAPIService.swift */; };
 		E19A0BCA11B03CD13E4A1F04 /* UsageAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D3BC22C81208BA2B853C240 /* UsageAPIService.swift */; };
 		E26C6870A1E9540BCA9E7045 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 011E707E6F2F284A99ECF925 /* SettingsView.swift */; };
 		E45AD6199CAB1661300675D6 /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD0415091A24EBCDA6840A49 /* SessionDetailView.swift */; };
@@ -82,6 +84,8 @@
 		767C851B0E765A9B6279A6FF /* OpenAIUsageData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIUsageData.swift; sourceTree = "<group>"; };
 		77339C38F26D780CFD6D03EB /* ClaudeStatistics.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeStatistics.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7D3BC22C81208BA2B853C240 /* UsageAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageAPIService.swift; sourceTree = "<group>"; };
+		869DD78512156D8353633381 /* OpenAIUsageAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIUsageAPIService.swift; sourceTree = "<group>"; };
+		9FDECD39A70AE505FBC38DEB /* OpenAIUsageViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIUsageViewModel.swift; sourceTree = "<group>"; };
 		A0B63D6ACC632BBF130F8F69 /* OpenAICredentialService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAICredentialService.swift; sourceTree = "<group>"; };
 		A776ADBF033757E89353F9E2 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		B466FB316C76AB0C39E12E7B /* DiagnosticLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLogger.swift; sourceTree = "<group>"; };
@@ -141,6 +145,7 @@
 				B466FB316C76AB0C39E12E7B /* DiagnosticLogger.swift */,
 				35EC230BC5F1EF207A984D87 /* FSEventsWatcher.swift */,
 				A0B63D6ACC632BBF130F8F69 /* OpenAICredentialService.swift */,
+				869DD78512156D8353633381 /* OpenAIUsageAPIService.swift */,
 				054E2C5CD2CBA7B14AFF897A /* PricingFetchService.swift */,
 				3D5BA98DFF322E54A1E5B1F2 /* SessionDataStore.swift */,
 				1A4A95A6629B2D5258EA882D /* SessionScanner.swift */,
@@ -181,6 +186,7 @@
 		630E776A88A7FDCBD895C84A /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				9FDECD39A70AE505FBC38DEB /* OpenAIUsageViewModel.swift */,
 				1850A208EA7AE5CDF9896207 /* ProfileViewModel.swift */,
 				58B71B5593D63536AB462D70 /* SessionViewModel.swift */,
 				5306E49F4AF08425229312F0 /* UsageViewModel.swift */,
@@ -326,7 +332,9 @@
 				B6BDC5BBD811160C485C9D64 /* MenuBarUsageSelection.swift in Sources */,
 				F3272760285AF18F519D8E80 /* MenuBarView.swift in Sources */,
 				045B57F787E37E71A5434B49 /* OpenAICredentialService.swift in Sources */,
+				E09B487B5B16400C98D87D7B /* OpenAIUsageAPIService.swift in Sources */,
 				2243C4B9AB063FDA94DE5E4F /* OpenAIUsageData.swift in Sources */,
+				11AF5803393ECD1CB964FE7D /* OpenAIUsageViewModel.swift in Sources */,
 				4809D9A533DA37D1B71D1592 /* PricingFetchService.swift in Sources */,
 				0BD1DED6EC1DFF9326A1CAE5 /* ProfileViewModel.swift in Sources */,
 				1D84A21259B5673F6ABDFCC1 /* Session.swift in Sources */,
