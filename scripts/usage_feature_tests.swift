@@ -126,7 +126,9 @@ func runMenuBarUsageSelectionTests() {
     let emptyItems = MenuBarUsageSelection.items(
         claudeFiveHourPercent: nil,
         zaiFiveHourPercent: nil,
-        zaiEnabled: true
+        openAIFiveHourPercent: nil,
+        zaiEnabled: true,
+        openAIEnabled: false
     )
     expect(emptyItems.isEmpty, "Expected menu bar items to be empty when both providers are invalid")
     expect(
@@ -137,7 +139,9 @@ func runMenuBarUsageSelectionTests() {
     let claudeOnlyItems = MenuBarUsageSelection.items(
         claudeFiveHourPercent: 42.9,
         zaiFiveHourPercent: nil,
-        zaiEnabled: true
+        openAIFiveHourPercent: nil,
+        zaiEnabled: true,
+        openAIEnabled: false
     )
     expect(
         claudeOnlyItems.map(\.providerLabel) == ["C"],
@@ -151,7 +155,9 @@ func runMenuBarUsageSelectionTests() {
     let zaiOnlyItems = MenuBarUsageSelection.items(
         claudeFiveHourPercent: nil,
         zaiFiveHourPercent: 64.2,
-        zaiEnabled: true
+        openAIFiveHourPercent: nil,
+        zaiEnabled: true,
+        openAIEnabled: false
     )
     expect(
         zaiOnlyItems.map(\.providerLabel) == ["Z"],
@@ -165,7 +171,9 @@ func runMenuBarUsageSelectionTests() {
     let combinedItems = MenuBarUsageSelection.items(
         claudeFiveHourPercent: 42.9,
         zaiFiveHourPercent: 64.2,
-        zaiEnabled: true
+        openAIFiveHourPercent: nil,
+        zaiEnabled: true,
+        openAIEnabled: false
     )
     expect(
         combinedItems.map(\.providerLabel) == ["C", "Z"],
@@ -183,7 +191,9 @@ func runMenuBarUsageSelectionTests() {
     let disabledZaiItems = MenuBarUsageSelection.items(
         claudeFiveHourPercent: 42.9,
         zaiFiveHourPercent: 64.2,
-        zaiEnabled: false
+        openAIFiveHourPercent: nil,
+        zaiEnabled: false,
+        openAIEnabled: false
     )
     expect(
         disabledZaiItems.map(\.providerLabel) == ["C"],
