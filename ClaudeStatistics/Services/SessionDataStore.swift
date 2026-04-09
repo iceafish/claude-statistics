@@ -347,11 +347,11 @@ final class SessionDataStore: ObservableObject {
         let granularity = periodType.trendGranularity
         var buckets: [Date: (tokens: Int, cost: Double)] = [:]
 
-        // Daily view → hourSlices; weekly/monthly/yearly → daySlices (derived from hourSlices)
-        let useHourSlices = periodType == .daily
+        // Daily view → fiveMinSlices; weekly/monthly/yearly → daySlices
+        let useFineSlices = periodType == .daily
 
         for (sessionId, stats) in parsedStats {
-            let slices: [Date: SessionStats.DaySlice] = useHourSlices ? stats.hourSlices : stats.daySlices
+            let slices: [Date: SessionStats.DaySlice] = useFineSlices ? stats.fiveMinSlices : stats.daySlices
             if !slices.isEmpty {
                 for (sliceTime, slice) in slices {
                     let slicePeriodStart = periodType.startOfPeriod(for: sliceTime)
@@ -396,10 +396,70 @@ final class SessionDataStore: ObservableObject {
             cumCost += val.cost
             // End of bucket = start of next granularity unit
             // For the last bucket, cap at "now" to avoid showing future time
-            let bucketEnd = cal.date(byAdding: granularity.calendarComponent, value: 1, to: time)!
+            let bucketEnd = cal.date(byAdding: granularity.calendarComponent, value: granularity.stepValue, to: time)!
             let dataTime = (i == sorted.count - 1) ? min(bucketEnd, Date()) : bucketEnd
             result.append(TrendDataPoint(time: dataTime, tokens: cumTokens, cost: cumCost))
         }
+        return result
+    }
+
+    /// Aggregate raw token/cost usage for a rolling time window.
+    func aggregateWindowTrendData(from start: Date, to end: Date, granularity: TrendGranularity, cumulative: Bool = false) -> [TrendDataPoint] {
+        guard start < end else { return [] }
+
+        let cal = Calendar.current
+        let useFineSlices = granularity == .fiveMinute || granularity == .minute || granularity == .hour
+        let sliceDuration: TimeInterval = useFineSlices ? 5 * 60 : 24 * 3600
+        var buckets: [Date: (tokens: Int, cost: Double)] = [:]
+
+        for stats in parsedStats.values {
+            let slices: [Date: SessionStats.DaySlice] = useFineSlices ? stats.fiveMinSlices : stats.daySlices
+            for (sliceTime, slice) in slices {
+                let sliceEnd = sliceTime.addingTimeInterval(sliceDuration)
+                guard sliceEnd > start, sliceTime < end else { continue }
+
+                let bucket = granularity.bucketStart(for: sliceTime)
+                var existing = buckets[bucket, default: (tokens: 0, cost: 0)]
+                existing.tokens += slice.totalTokens
+                existing.cost += slice.estimatedCost
+                buckets[bucket] = existing
+            }
+        }
+
+        if cumulative {
+            var result: [TrendDataPoint] = [TrendDataPoint(time: start, tokens: 0, cost: 0)]
+            var bucketTime = granularity.bucketStart(for: start)
+            var cumTokens = 0
+            var cumCost = 0.0
+
+            while bucketTime < end {
+                let bucket = buckets[bucketTime, default: (tokens: 0, cost: 0)]
+                cumTokens += bucket.tokens
+                cumCost += bucket.cost
+                // Only add points after the zero-origin to keep x-axis monotonic
+                if bucketTime > start {
+                    result.append(TrendDataPoint(time: bucketTime, tokens: cumTokens, cost: cumCost))
+                }
+                guard let nextBucket = cal.date(byAdding: granularity.calendarComponent, value: granularity.stepValue, to: bucketTime) else { break }
+                bucketTime = nextBucket
+            }
+
+            // Data from the first partial bucket was accumulated but not yet plotted.
+            // Show it at the next bucket boundary (already included in cumTokens/cumCost above).
+            return result
+        }
+
+        // Non-cumulative: per-bucket values
+        var result: [TrendDataPoint] = []
+        var bucketTime = granularity.bucketStart(for: start)
+
+        while bucketTime < end {
+            let bucket = buckets[bucketTime, default: (tokens: 0, cost: 0)]
+            result.append(TrendDataPoint(time: bucketTime, tokens: bucket.tokens, cost: bucket.cost))
+            guard let nextBucket = cal.date(byAdding: granularity.calendarComponent, value: granularity.stepValue, to: bucketTime) else { break }
+            bucketTime = nextBucket
+        }
+
         return result
     }
 

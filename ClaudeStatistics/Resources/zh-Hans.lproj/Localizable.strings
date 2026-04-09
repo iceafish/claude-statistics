@@ -100,6 +100,8 @@
 "usage.resetsIn %@" = "%@ 后重置";
 "usage.exhaustEstimate %@" = "按当前速率，约 %@ 后耗尽";
 "usage.safeEstimate %@" = "按当前速率，重置前不会耗尽（余量约 %@）";
+"usage.exhaustShort %@" = "· %@ 后耗尽";
+"usage.safeShort %@" = "· 安全（余 %@）";
 "usage.noData" = "暂无用量数据";
 "usage.retry" = "重试";
 "usage.updated %@" = "更新于: %@";

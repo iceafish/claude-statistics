@@ -2,6 +2,8 @@ import SwiftUI
 
 struct UsageView: View {
     @ObservedObject var viewModel: UsageViewModel
+    @ObservedObject var store: SessionDataStore
+    @State private var selectedWindowTab = 0  // 0 = 5h, 1 = 7d
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -42,20 +44,9 @@ struct UsageView: View {
                 UsageWindowRow(
                     title: "usage.5hour",
                     utilization: usage.fiveHour?.utilization ?? 0,
-                    countdown: viewModel.fiveHourResetCountdown
+                    countdown: viewModel.fiveHourResetCountdown,
+                    exhaustEstimate: viewModel.fiveHourExhaustEstimate
                 )
-
-                if let estimate = viewModel.fiveHourExhaustEstimate {
-                    if estimate.willExhaust {
-                        Text("usage.exhaustEstimate \(estimate.text)")
-                            .font(.caption2)
-                            .foregroundStyle(.red)
-                    } else {
-                        Text("usage.safeEstimate \(estimate.text)")
-                            .font(.caption2)
-                            .foregroundStyle(.green)
-                    }
-                }
 
                 UsageWindowRow(
                     title: "usage.7day",
@@ -90,6 +81,27 @@ struct UsageView: View {
                             Text("$\(String(format: "%.2f", used)) / $\(String(format: "%.0f", limit))")
                                 .font(.caption)
                         }
+                    }
+                }
+
+                Divider()
+
+                Picker("", selection: $selectedWindowTab) {
+                    Text("5h").tag(0)
+                    Text("7d").tag(1)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                if selectedWindowTab == 0 {
+                    if let info = windowTrendInfo(for: usage.fiveHour, durationValue: -5, durationComponent: .hour, granularity: .fiveMinute) {
+                        windowTimeRange(info)
+                        UsageTrendChartView(dataPoints: info.dataPoints, granularity: info.granularity, windowStart: info.windowStart, windowEnd: info.windowEnd)
+                    }
+                } else {
+                    if let info = windowTrendInfo(for: usage.sevenDay, durationValue: -7, durationComponent: .day, granularity: .hour) {
+                        windowTimeRange(info)
+                        UsageTrendChartView(dataPoints: info.dataPoints, granularity: info.granularity, windowStart: info.windowStart, windowEnd: info.windowEnd)
                     }
                 }
             } else if !viewModel.isLoading {
@@ -129,6 +141,62 @@ struct UsageView: View {
 }
 
 extension UsageView {
+    struct WindowTrendInfo {
+        let dataPoints: [TrendDataPoint]
+        let granularity: TrendGranularity
+        let windowStart: Date
+        let windowEnd: Date
+    }
+
+    private func windowTrendInfo(
+        for window: UsageWindow?,
+        durationValue: Int,
+        durationComponent: Calendar.Component,
+        granularity: TrendGranularity
+    ) -> WindowTrendInfo? {
+        guard store.isFullParseComplete,
+              let window,
+              let resetAt = window.resetsAtDate,
+              let start = Calendar.current.date(byAdding: durationComponent, value: durationValue, to: resetAt) else {
+            return nil
+        }
+
+        let snapshotTime = min(viewModel.lastFetchedAt ?? Date(), resetAt)
+        guard start < snapshotTime else { return nil }
+
+        let data = store.aggregateWindowTrendData(from: start, to: snapshotTime, granularity: granularity, cumulative: true)
+        return data.isEmpty ? nil : WindowTrendInfo(
+            dataPoints: data,
+            granularity: granularity,
+            windowStart: start,
+            windowEnd: resetAt
+        )
+    }
+
+    private func windowTimeRange(_ info: WindowTrendInfo) -> some View {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "MM/dd HH:mm"
+        let startStr = formatWindowTime(info.windowStart, fmt: fmt)
+        let endStr = formatWindowTime(info.windowEnd, fmt: fmt)
+        return Text("\(startStr) — \(endStr)")
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    private func formatWindowTime(_ date: Date, fmt: DateFormatter) -> String {
+        let cal = Calendar.current
+        let comps = cal.dateComponents([.hour, .minute], from: date)
+        if comps.hour == 0 && (comps.minute ?? 0) == 0 {
+            let prevDay = cal.date(byAdding: .day, value: -1, to: date)!
+            fmt.dateFormat = "MM/dd"
+            let dayStr = fmt.string(from: prevDay)
+            fmt.dateFormat = "MM/dd HH:mm"
+            return dayStr + " 24:00"
+        }
+        return fmt.string(from: date)
+    }
+
     func errorBanner(_ error: String) -> some View {
         HStack(spacing: 4) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -152,6 +220,7 @@ struct UsageWindowRow: View {
     let title: LocalizedStringKey
     let utilization: Double
     let countdown: String?
+    var exhaustEstimate: (text: String, willExhaust: Bool)? = nil
 
     private var color: Color {
         if utilization >= 80 { return .red }
@@ -165,6 +234,11 @@ struct UsageWindowRow: View {
                 Text(title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let estimate = exhaustEstimate {
+                    Text(estimate.willExhaust ? "usage.exhaustShort \(estimate.text)" : "usage.safeShort \(estimate.text)")
+                        .font(.caption2)
+                        .foregroundStyle(estimate.willExhaust ? .red : .green)
+                }
                 Spacer()
                 Text("\(Int(utilization))%")
                     .font(.caption)

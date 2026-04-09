@@ -55,23 +55,23 @@ struct SessionStats: Codable {
     var assistantMessageCount: Int = 0
 
     // MARK: - Stored: single source of truth for time-bucketed data
-    /// Per-hour token/cost data, keyed by start of hour in local timezone.
-    /// All other aggregations (day, totals, modelBreakdown) are derived from this.
-    var hourSlices: [Date: DaySlice] = [:]
+    /// Per-5-minute token/cost data, keyed by 5-minute boundary in local timezone.
+    /// All other aggregations (hour, day, totals, modelBreakdown) are derived from this.
+    var fiveMinSlices: [Date: DaySlice] = [:]
 
-    // MARK: - Derived from hourSlices
+    // MARK: - Derived from fiveMinSlices
 
-    var totalInputTokens: Int { hourSlices.values.reduce(0) { $0 + $1.totalInputTokens } }
-    var totalOutputTokens: Int { hourSlices.values.reduce(0) { $0 + $1.totalOutputTokens } }
-    var cacheCreation5mTokens: Int { hourSlices.values.reduce(0) { $0 + $1.cacheCreation5mTokens } }
-    var cacheCreation1hTokens: Int { hourSlices.values.reduce(0) { $0 + $1.cacheCreation1hTokens } }
-    var cacheCreationTotalTokens: Int { hourSlices.values.reduce(0) { $0 + $1.cacheCreationTotalTokens } }
-    var cacheReadTokens: Int { hourSlices.values.reduce(0) { $0 + $1.cacheReadTokens } }
-    var messageCount: Int { hourSlices.values.reduce(0) { $0 + $1.messageCount } }
+    var totalInputTokens: Int { fiveMinSlices.values.reduce(0) { $0 + $1.totalInputTokens } }
+    var totalOutputTokens: Int { fiveMinSlices.values.reduce(0) { $0 + $1.totalOutputTokens } }
+    var cacheCreation5mTokens: Int { fiveMinSlices.values.reduce(0) { $0 + $1.cacheCreation5mTokens } }
+    var cacheCreation1hTokens: Int { fiveMinSlices.values.reduce(0) { $0 + $1.cacheCreation1hTokens } }
+    var cacheCreationTotalTokens: Int { fiveMinSlices.values.reduce(0) { $0 + $1.cacheCreationTotalTokens } }
+    var cacheReadTokens: Int { fiveMinSlices.values.reduce(0) { $0 + $1.cacheReadTokens } }
+    var messageCount: Int { fiveMinSlices.values.reduce(0) { $0 + $1.messageCount } }
 
     var toolUseCounts: [String: Int] {
         var merged: [String: Int] = [:]
-        for slice in hourSlices.values {
+        for slice in fiveMinSlices.values {
             for (tool, count) in slice.toolUseCounts {
                 merged[tool, default: 0] += count
             }
@@ -81,7 +81,7 @@ struct SessionStats: Codable {
 
     var modelBreakdown: [String: ModelTokenStats] {
         var merged: [String: ModelTokenStats] = [:]
-        for slice in hourSlices.values {
+        for slice in fiveMinSlices.values {
             for (model, mts) in slice.modelBreakdown {
                 var existing = merged[model, default: ModelTokenStats()]
                 existing.inputTokens += mts.inputTokens
@@ -97,35 +97,25 @@ struct SessionStats: Codable {
         return merged
     }
 
-    /// Per-day data derived from hourSlices, keyed by startOfDay in local timezone.
+    /// Per-hour data derived from fiveMinSlices, keyed by start of hour.
+    var hourSlices: [Date: DaySlice] {
+        let cal = Calendar.current
+        var buckets: [Date: DaySlice] = [:]
+        for (sliceStart, slice) in fiveMinSlices {
+            let comps = cal.dateComponents([.year, .month, .day, .hour], from: sliceStart)
+            let hourStart = cal.date(from: comps) ?? sliceStart
+            buckets[hourStart, default: DaySlice()].merge(slice)
+        }
+        return buckets
+    }
+
+    /// Per-day data derived from fiveMinSlices, keyed by startOfDay in local timezone.
     var daySlices: [Date: DaySlice] {
         let cal = Calendar.current
         var buckets: [Date: DaySlice] = [:]
-        for (hourStart, slice) in hourSlices {
-            let dayStart = cal.startOfDay(for: hourStart)
-            var day = buckets[dayStart, default: DaySlice()]
-            day.totalInputTokens += slice.totalInputTokens
-            day.totalOutputTokens += slice.totalOutputTokens
-            day.cacheCreation5mTokens += slice.cacheCreation5mTokens
-            day.cacheCreation1hTokens += slice.cacheCreation1hTokens
-            day.cacheCreationTotalTokens += slice.cacheCreationTotalTokens
-            day.cacheReadTokens += slice.cacheReadTokens
-            day.messageCount += slice.messageCount
-            for (tool, count) in slice.toolUseCounts {
-                day.toolUseCounts[tool, default: 0] += count
-            }
-            for (model, mts) in slice.modelBreakdown {
-                var existing = day.modelBreakdown[model, default: ModelTokenStats()]
-                existing.inputTokens += mts.inputTokens
-                existing.outputTokens += mts.outputTokens
-                existing.cacheCreation5mTokens += mts.cacheCreation5mTokens
-                existing.cacheCreation1hTokens += mts.cacheCreation1hTokens
-                existing.cacheCreationTotalTokens += mts.cacheCreationTotalTokens
-                existing.cacheReadTokens += mts.cacheReadTokens
-                existing.messageCount += mts.messageCount
-                day.modelBreakdown[model] = existing
-            }
-            buckets[dayStart] = day
+        for (sliceStart, slice) in fiveMinSlices {
+            let dayStart = cal.startOfDay(for: sliceStart)
+            buckets[dayStart, default: DaySlice()].merge(slice)
         }
         return buckets
     }
@@ -202,7 +192,7 @@ struct SessionStats: Codable {
     // MARK: - Codable (only stored fields)
     enum CodingKeys: String, CodingKey {
         case model, startTime, endTime, lastPrompt, contextTokens
-        case userMessageCount, assistantMessageCount, hourSlices
+        case userMessageCount, assistantMessageCount, fiveMinSlices
     }
 
     func encode(to encoder: Encoder) throws {
@@ -214,10 +204,10 @@ struct SessionStats: Codable {
         try container.encode(contextTokens, forKey: .contextTokens)
         try container.encode(userMessageCount, forKey: .userMessageCount)
         try container.encode(assistantMessageCount, forKey: .assistantMessageCount)
-        let hourStringKeyed = Dictionary(uniqueKeysWithValues:
-            hourSlices.map { (String($0.key.timeIntervalSince1970), $0.value) }
+        let sliceStringKeyed = Dictionary(uniqueKeysWithValues:
+            fiveMinSlices.map { (String($0.key.timeIntervalSince1970), $0.value) }
         )
-        try container.encode(hourStringKeyed, forKey: .hourSlices)
+        try container.encode(sliceStringKeyed, forKey: .fiveMinSlices)
     }
 
     init(from decoder: Decoder) throws {
@@ -229,9 +219,9 @@ struct SessionStats: Codable {
         contextTokens = try container.decodeIfPresent(Int.self, forKey: .contextTokens) ?? 0
         userMessageCount = try container.decodeIfPresent(Int.self, forKey: .userMessageCount) ?? 0
         assistantMessageCount = try container.decodeIfPresent(Int.self, forKey: .assistantMessageCount) ?? 0
-        let hourStringKeyed = try container.decodeIfPresent([String: DaySlice].self, forKey: .hourSlices) ?? [:]
-        hourSlices = Dictionary(uniqueKeysWithValues:
-            hourStringKeyed.compactMap { key, value -> (Date, DaySlice)? in
+        let sliceStringKeyed = try container.decodeIfPresent([String: DaySlice].self, forKey: .fiveMinSlices) ?? [:]
+        fiveMinSlices = Dictionary(uniqueKeysWithValues:
+            sliceStringKeyed.compactMap { key, value -> (Date, DaySlice)? in
                 guard let ti = Double(key) else { return nil }
                 return (Date(timeIntervalSince1970: ti), value)
             }
@@ -270,6 +260,30 @@ struct SessionStats: Codable {
 
         var isCostEstimated: Bool {
             modelBreakdown.keys.contains { !ModelPricing.shared.isExactMatch(for: $0) }
+        }
+
+        mutating func merge(_ other: DaySlice) {
+            totalInputTokens += other.totalInputTokens
+            totalOutputTokens += other.totalOutputTokens
+            cacheCreation5mTokens += other.cacheCreation5mTokens
+            cacheCreation1hTokens += other.cacheCreation1hTokens
+            cacheCreationTotalTokens += other.cacheCreationTotalTokens
+            cacheReadTokens += other.cacheReadTokens
+            messageCount += other.messageCount
+            for (tool, count) in other.toolUseCounts {
+                toolUseCounts[tool, default: 0] += count
+            }
+            for (model, mts) in other.modelBreakdown {
+                var existing = modelBreakdown[model, default: ModelTokenStats()]
+                existing.inputTokens += mts.inputTokens
+                existing.outputTokens += mts.outputTokens
+                existing.cacheCreation5mTokens += mts.cacheCreation5mTokens
+                existing.cacheCreation1hTokens += mts.cacheCreation1hTokens
+                existing.cacheCreationTotalTokens += mts.cacheCreationTotalTokens
+                existing.cacheReadTokens += mts.cacheReadTokens
+                existing.messageCount += mts.messageCount
+                modelBreakdown[model] = existing
+            }
         }
     }
 

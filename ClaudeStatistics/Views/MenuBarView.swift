@@ -85,7 +85,7 @@ struct MenuBarView: View {
                         StatisticsView(store: store)
                     case .usage:
                         ScrollView {
-                            UsageView(viewModel: usageViewModel)
+                            UsageView(viewModel: usageViewModel, store: store)
                                 .padding(12)
                         }
                     case .settings:
@@ -116,14 +116,7 @@ struct MenuBarView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
         }
-        .frame(width: 480, height: 520)
-        .onAppear {
-            usageViewModel.loadCache()
-            store.popoverDidOpen()
-        }
-        .onDisappear {
-            store.popoverDidClose()
-        }
+        .frame(minWidth: 480, maxWidth: 800, minHeight: 520, maxHeight: 900)
     }
 
     @ViewBuilder
@@ -190,5 +183,34 @@ struct TabButton: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+    }
+}
+
+/// Wrapper that reactively applies locale from @AppStorage.
+struct PanelContentView: View {
+    @AppStorage("appLanguage") private var appLanguage = "auto"
+    @ObservedObject var usageViewModel: UsageViewModel
+    @ObservedObject var profileViewModel: ProfileViewModel
+    @ObservedObject var sessionViewModel: SessionViewModel
+    @ObservedObject var store: SessionDataStore
+    @ObservedObject var updaterService: UpdaterService
+
+    private var currentLocale: Locale {
+        switch appLanguage {
+        case "en": Locale(identifier: "en")
+        case "zh-Hans": Locale(identifier: "zh-Hans")
+        default: Locale.current
+        }
+    }
+
+    var body: some View {
+        MenuBarView(
+            usageViewModel: usageViewModel,
+            profileViewModel: profileViewModel,
+            sessionViewModel: sessionViewModel,
+            store: store,
+            updaterService: updaterService
+        )
+        .environment(\.locale, currentLocale)
     }
 }

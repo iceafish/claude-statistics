@@ -31,21 +31,24 @@ final class TranscriptParser {
         // Store per-message data; last entry wins (streaming sends partial then final usage)
         var messageData: [String: MessageAccum] = [:]
         var seenToolUseIds: Set<String> = []
-        var toolUseHours: [(Date, String)] = []   // (hourStart, toolName)
-        var userMessageHours: [Date] = []         // hourStarts for user messages
+        var toolUseTimes: [(Date, String)] = []   // (sliceStart, toolName)
+        var userMessageTimes: [Date] = []         // sliceStarts for user messages
         let cal = Calendar.current
         let logger = DiagnosticLogger.shared
         var skippedLines = 0
 
-        /// Compute hourSlice key: truncate to hour, with 00:00 attributed to previous day's 23:00
-        func hourKey(for date: Date) -> Date {
-            let comps = cal.dateComponents([.year, .month, .day, .hour], from: date)
-            guard let hourStart = cal.date(from: comps) else { return date }
+        /// Compute fiveMinSlice key: truncate to 5-minute boundary, with midnight hour attributed to previous day
+        func fiveMinKey(for date: Date) -> Date {
+            var comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+            comps.minute = ((comps.minute ?? 0) / 5) * 5
+            comps.second = 0
+            comps.nanosecond = 0
+            guard let result = cal.date(from: comps) else { return date }
             if comps.hour == 0 {
-                // Midnight belongs to the previous day — bucket as 23:00 of the prior day
-                return cal.date(byAdding: .hour, value: -1, to: hourStart)!
+                // Midnight belongs to the previous day — shift back 1 hour
+                return cal.date(byAdding: .hour, value: -1, to: result)!
             }
-            return hourStart
+            return result
         }
 
         for (lineIndex, line) in lines.enumerated() {
@@ -75,7 +78,7 @@ final class TranscriptParser {
             case "user", "human":
                 stats.userMessageCount += 1
                 if let ts = entry.timestampDate {
-                    userMessageHours.append(hourKey(for: ts))
+                    userMessageTimes.append(fiveMinKey(for: ts))
                 }
                 // Track last user text for "Last Prompt"
                 if let text = Self.extractUserText(from: entry) {
@@ -134,7 +137,7 @@ final class TranscriptParser {
                                 if !seenToolUseIds.contains(toolId) {
                                     seenToolUseIds.insert(toolId)
                                     if let ts = entry.timestampDate {
-                                        toolUseHours.append((hourKey(for: ts), toolName))
+                                        toolUseTimes.append((fiveMinKey(for: ts), toolName))
                                     }
                                 }
                             }
@@ -147,11 +150,11 @@ final class TranscriptParser {
             }
         }
 
-        // Aggregate per-message usage into hourSlices (single source of truth)
+        // Aggregate per-message usage into fiveMinSlices (single source of truth)
         for (_, accum) in messageData {
             if let ts = accum.timestamp {
-                let hKey = hourKey(for: ts)
-                var slice = stats.hourSlices[hKey] ?? SessionStats.DaySlice()
+                let sliceKey = fiveMinKey(for: ts)
+                var slice = stats.fiveMinSlices[sliceKey] ?? SessionStats.DaySlice()
                 slice.totalInputTokens += accum.inputTokens
                 slice.totalOutputTokens += accum.outputTokens
                 slice.cacheCreationTotalTokens += accum.cacheCreationTotalTokens
@@ -168,16 +171,16 @@ final class TranscriptParser {
                 ms.cacheCreation1hTokens += accum.cacheCreation1hTokens
                 ms.messageCount += 1
                 slice.modelBreakdown[accum.model] = ms
-                stats.hourSlices[hKey] = slice
+                stats.fiveMinSlices[sliceKey] = slice
             }
         }
 
-        // Assign user messages and tool uses to hour slices
-        for hour in userMessageHours {
-            stats.hourSlices[hour, default: SessionStats.DaySlice()].messageCount += 1
+        // Assign user messages and tool uses to fiveMin slices
+        for time in userMessageTimes {
+            stats.fiveMinSlices[time, default: SessionStats.DaySlice()].messageCount += 1
         }
-        for (hour, toolName) in toolUseHours {
-            stats.hourSlices[hour, default: SessionStats.DaySlice()].toolUseCounts[toolName, default: 0] += 1
+        for (time, toolName) in toolUseTimes {
+            stats.fiveMinSlices[time, default: SessionStats.DaySlice()].toolUseCounts[toolName, default: 0] += 1
         }
 
         logger.parsingSummary(

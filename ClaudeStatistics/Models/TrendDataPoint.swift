@@ -8,15 +8,24 @@ struct TrendDataPoint: Identifiable {
 }
 
 enum TrendGranularity: String, CaseIterable {
-    case minute, hour, day, week, month
+    case fiveMinute, minute, hour, day, week, month
 
     var calendarComponent: Calendar.Component {
         switch self {
+        case .fiveMinute: return .minute
         case .minute: return .minute
         case .hour:   return .hour
         case .day:    return .day
         case .week:   return .weekOfYear
         case .month:  return .month
+        }
+    }
+
+    /// Step value for advancing to the next bucket
+    var stepValue: Int {
+        switch self {
+        case .fiveMinute: return 5
+        default: return 1
         }
     }
 
@@ -29,6 +38,10 @@ enum TrendGranularity: String, CaseIterable {
     func bucketStart(for date: Date) -> Date {
         let cal = Calendar.current
         switch self {
+        case .fiveMinute:
+            var comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+            comps.minute = ((comps.minute ?? 0) / 5) * 5
+            return cal.date(from: comps) ?? date
         case .minute:
             let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date)
             return cal.date(from: comps) ?? date
@@ -49,6 +62,7 @@ enum TrendGranularity: String, CaseIterable {
     /// X-axis date format string
     var dateFormatString: String {
         switch self {
+        case .fiveMinute: return "HH:mm"
         case .minute: return "HH:mm"
         case .hour:   return "HH:00"
         case .day:    return "MM/dd"

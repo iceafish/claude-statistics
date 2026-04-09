@@ -68,7 +68,7 @@ final class DatabaseService {
     }
 
     /// Current schema version — bump to force full reparse of session cache
-    private static let currentSchemaVersion: Int32 = 3
+    private static let currentSchemaVersion: Int32 = 4
 
     private func migrateIfNeeded() {
         var version: Int32 = 0

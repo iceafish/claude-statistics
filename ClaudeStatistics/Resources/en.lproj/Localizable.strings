@@ -100,6 +100,8 @@
 "usage.resetsIn %@" = "resets in %@";
 "usage.exhaustEstimate %@" = "At current rate, exhausts in %@";
 "usage.safeEstimate %@" = "At current rate, resets before exhaustion (%@ remaining)";
+"usage.exhaustShort %@" = "· exhausts in %@";
+"usage.safeShort %@" = "· safe (%@ left)";
 "usage.noData" = "No usage data available";
 "usage.retry" = "Retry";
 "usage.updated %@" = "Updated: %@";

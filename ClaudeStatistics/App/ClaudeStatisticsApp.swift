@@ -13,49 +13,23 @@ final class AppState: ObservableObject {
     }
 }
 
-struct MenuBarLabel: View {
-    @ObservedObject var usageViewModel: UsageViewModel
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    var statusBarController: StatusBarController!
+    let appState = AppState()
 
-    var body: some View {
-        HStack(spacing: 3) {
-            Image("MenuBarIcon")
-                .renderingMode(.template)
-            Text(usageViewModel.menuBarText)
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-        }
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        LanguageManager.setup()
+        statusBarController = StatusBarController(appState: appState)
     }
 }
 
 @main
 struct ClaudeStatisticsApp: App {
-    @StateObject private var appState = AppState()
-    @AppStorage("appLanguage") private var appLanguage = "auto"
-
-    private var currentLocale: Locale {
-        switch appLanguage {
-        case "en": Locale(identifier: "en")
-        case "zh-Hans": Locale(identifier: "zh-Hans")
-        default: Locale.current
-        }
-    }
-
-    init() {
-        LanguageManager.setup()
-    }
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        MenuBarExtra {
-            MenuBarView(
-                usageViewModel: appState.usageViewModel,
-                profileViewModel: appState.profileViewModel,
-                sessionViewModel: appState.sessionViewModel,
-                store: appState.store,
-                updaterService: appState.updaterService
-            )
-            .environment(\.locale, currentLocale)
-        } label: {
-            MenuBarLabel(usageViewModel: appState.usageViewModel)
-        }
-        .menuBarExtraStyle(.window)
+        // No visible scene — everything is managed by StatusBarController
+        Settings { EmptyView() }
     }
 }
