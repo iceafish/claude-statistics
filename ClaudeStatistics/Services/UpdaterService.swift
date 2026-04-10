@@ -7,8 +7,18 @@ final class GentleReminderDelegate: NSObject, SPUStandardUserDriverDelegate {
     var supportsGentleScheduledUpdateReminders: Bool { true }
 
     func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
+        // Close the status bar panel
+        NSApp.windows.first { $0 is NSPanel && $0.level == .statusBar }?.orderOut(nil)
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+
+        // Bring Sparkle's window to front after it appears
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            for window in NSApp.windows where !(window is NSPanel) && window.isVisible {
+                window.level = .floating
+                window.orderFrontRegardless()
+            }
+        }
     }
 
     func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
@@ -60,6 +70,8 @@ final class UpdaterService: ObservableObject {
     }
 
     func checkForUpdates() {
+        // Close the status bar panel so Sparkle's dialog appears on top
+        NSApp.windows.first { $0 is NSPanel && $0.level == .statusBar }?.orderOut(nil)
         NSApp.activate(ignoringOtherApps: true)
         controller.checkForUpdates(nil)
     }

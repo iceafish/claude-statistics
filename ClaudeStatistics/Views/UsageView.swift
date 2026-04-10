@@ -2,6 +2,8 @@ import SwiftUI
 
 struct UsageView: View {
     @ObservedObject var viewModel: UsageViewModel
+    @ObservedObject var store: SessionDataStore
+    @State private var selectedWindowTab = "5h"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -17,7 +19,7 @@ struct UsageView: View {
                     Image(systemName: "safari")
                         .font(.system(size: 11))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hoverScale)
                 .foregroundStyle(.secondary)
                 .help("usage.viewOnline")
 
@@ -35,20 +37,9 @@ struct UsageView: View {
                 UsageWindowRow(
                     title: "usage.5hour",
                     utilization: usage.fiveHour?.utilization ?? 0,
-                    countdown: viewModel.fiveHourResetCountdown
+                    countdown: viewModel.fiveHourResetCountdown,
+                    exhaustEstimate: viewModel.fiveHourExhaustEstimate
                 )
-
-                if let estimate = viewModel.fiveHourExhaustEstimate {
-                    if estimate.willExhaust {
-                        Text("usage.exhaustEstimate \(estimate.text)")
-                            .font(.caption2)
-                            .foregroundStyle(.red)
-                    } else {
-                        Text("usage.safeEstimate \(estimate.text)")
-                            .font(.caption2)
-                            .foregroundStyle(.green)
-                    }
-                }
 
                 UsageWindowRow(
                     title: "usage.7day",
@@ -85,7 +76,30 @@ struct UsageView: View {
                         }
                     }
                 }
-            } else {
+
+                Divider()
+
+                Picker("", selection: $selectedWindowTab) {
+                    Text("5h").tag("5h")
+                    Text("7d").tag("7d")
+                    if usage.sevenDaySonnet != nil {
+                        Text("7d Sonnet").tag("7d_sonnet")
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                switch selectedWindowTab {
+                case "5h":
+                    windowChart(for: usage.fiveHour, durationValue: -5, durationComponent: .hour, granularity: .fiveMinute, modelFilter: isClaude)
+                case "7d":
+                    windowChart(for: usage.sevenDay, durationValue: -7, durationComponent: .day, granularity: .hour, modelFilter: isClaudeNonSonnet)
+                case "7d_sonnet":
+                    windowChart(for: usage.sevenDaySonnet, durationValue: -7, durationComponent: .day, granularity: .hour, modelFilter: isSonnet)
+                default:
+                    EmptyView()
+                }
+            } else if !viewModel.isLoading {
                 // No data — show error or empty state with retry action
                 if let error = viewModel.errorMessage {
                     errorBanner(error)
@@ -122,6 +136,185 @@ struct UsageView: View {
 }
 
 extension UsageView {
+    struct WindowTrendInfo {
+        let dataPoints: [TrendDataPoint]
+        let granularity: TrendGranularity
+        let windowStart: Date
+        let windowEnd: Date
+        let modelBreakdown: [ModelUsage]
+    }
+
+    private func windowTrendInfo(
+        for window: UsageWindow?,
+        durationValue: Int,
+        durationComponent: Calendar.Component,
+        granularity: TrendGranularity,
+        modelFilter: ((String) -> Bool)? = nil
+    ) -> WindowTrendInfo? {
+        guard store.isFullParseComplete,
+              let window,
+              let resetAt = window.resetsAtDate,
+              let start = Calendar.current.date(byAdding: durationComponent, value: durationValue, to: resetAt) else {
+            return nil
+        }
+
+        let snapshotTime = min(viewModel.lastFetchedAt ?? Date(), resetAt)
+        guard start < snapshotTime else { return nil }
+
+        let data = store.aggregateWindowTrendData(from: start, to: snapshotTime, granularity: granularity, cumulative: true, modelFilter: modelFilter)
+        let models = store.windowModelBreakdown(from: start, to: snapshotTime, modelFilter: modelFilter)
+        return data.isEmpty ? nil : WindowTrendInfo(
+            dataPoints: data,
+            granularity: granularity,
+            windowStart: start,
+            windowEnd: resetAt,
+            modelBreakdown: models
+        )
+    }
+
+    // MARK: - Model Filters
+
+    private func isClaude(_ model: String) -> Bool {
+        model.lowercased().contains("claude")
+    }
+
+    private func isSonnet(_ model: String) -> Bool {
+        model.lowercased().contains("sonnet")
+    }
+
+    private func isClaudeNonSonnet(_ model: String) -> Bool {
+        let lower = model.lowercased()
+        return lower.contains("claude") && !lower.contains("sonnet")
+    }
+
+    @ViewBuilder
+    private func windowChart(
+        for window: UsageWindow?,
+        durationValue: Int,
+        durationComponent: Calendar.Component,
+        granularity: TrendGranularity,
+        modelFilter: ((String) -> Bool)?
+    ) -> some View {
+        if let info = windowTrendInfo(for: window, durationValue: durationValue, durationComponent: durationComponent, granularity: granularity, modelFilter: modelFilter) {
+            windowTimeRange(info)
+            UsageTrendChartView(dataPoints: info.dataPoints, granularity: info.granularity, windowStart: info.windowStart, windowEnd: info.windowEnd)
+            if !info.modelBreakdown.isEmpty {
+                windowModelBreakdownView(info.modelBreakdown)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func windowModelBreakdownView(_ models: [ModelUsage]) -> some View {
+        let totalTokens = models.reduce(0) { $0 + $1.totalTokens }
+        let totalCost = models.reduce(0.0) { $0 + $1.cost }
+
+        VStack(alignment: .leading, spacing: 5) {
+            // Summary line
+            HStack {
+                HStack(spacing: 3) {
+                    Text("Tokens")
+                        .foregroundStyle(.tertiary)
+                    Text(abbreviateNumber(totalTokens))
+                        .foregroundStyle(.blue)
+                }
+                Spacer()
+                HStack(spacing: 3) {
+                    Text("Cost")
+                        .foregroundStyle(.tertiary)
+                    Text(abbreviateCost(totalCost))
+                        .foregroundStyle(.orange)
+                }
+            }
+            .font(.caption)
+
+            // Stacked bar
+            if totalTokens > 0 {
+                Canvas { ctx, size in
+                    var x: CGFloat = 0
+                    for model in models {
+                        let fraction = CGFloat(model.totalTokens) / CGFloat(totalTokens)
+                        let w = size.width * fraction
+                        ctx.fill(Path(CGRect(x: x, y: 0, width: w, height: size.height)),
+                                 with: .color(modelColor(model.model)))
+                        x += w
+                    }
+                }
+                .frame(height: 6)
+                .clipShape(Capsule())
+            }
+
+            // Inline legend
+            HStack(spacing: 10) {
+                ForEach(models) { model in
+                    let pct = totalTokens > 0 ? Double(model.totalTokens) / Double(totalTokens) * 100 : 0
+                    HStack(spacing: 3) {
+                        Circle().fill(modelColor(model.model)).frame(width: 6, height: 6)
+                        Text(shortModelName(model.model))
+                            .font(.caption2)
+                        Text("\(abbreviateNumber(model.totalTokens)) (\(String(format: "%.0f", pct))%)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    private func modelColor(_ model: String) -> Color {
+        let lower = model.lowercased()
+        if lower.contains("opus") { return .purple }
+        if lower.contains("sonnet") { return .blue }
+        if lower.contains("haiku") { return .green }
+        return .gray
+    }
+
+    private func shortModelName(_ model: String) -> String {
+        let lower = model.lowercased()
+        if lower.contains("opus") { return "Opus" }
+        if lower.contains("sonnet") { return "Sonnet" }
+        if lower.contains("haiku") { return "Haiku" }
+        return model
+    }
+
+    private func abbreviateNumber(_ n: Int) -> String {
+        if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
+        if n >= 1_000 { return String(format: "%.1fK", Double(n) / 1_000) }
+        return "\(n)"
+    }
+
+    private func abbreviateCost(_ cost: Double) -> String {
+        if cost >= 1.0 { return String(format: "$%.2f", cost) }
+        if cost >= 0.01 { return String(format: "$%.3f", cost) }
+        return String(format: "$%.4f", cost)
+    }
+
+    private func windowTimeRange(_ info: WindowTrendInfo) -> some View {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "MM/dd HH:mm"
+        let startStr = formatWindowTime(info.windowStart, fmt: fmt)
+        let endStr = formatWindowTime(info.windowEnd, fmt: fmt)
+        return Text("\(startStr) — \(endStr)")
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    private func formatWindowTime(_ date: Date, fmt: DateFormatter) -> String {
+        let cal = Calendar.current
+        let comps = cal.dateComponents([.hour, .minute], from: date)
+        if comps.hour == 0 && (comps.minute ?? 0) == 0 {
+            let prevDay = cal.date(byAdding: .day, value: -1, to: date)!
+            fmt.dateFormat = "MM/dd"
+            let dayStr = fmt.string(from: prevDay)
+            fmt.dateFormat = "MM/dd HH:mm"
+            return dayStr + " 24:00"
+        }
+        return fmt.string(from: date)
+    }
+
     func errorBanner(_ error: String) -> some View {
         HStack(spacing: 4) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -145,11 +338,12 @@ struct UsageWindowRow: View {
     let title: LocalizedStringKey
     let utilization: Double
     let countdown: String?
+    var exhaustEstimate: (text: String, willExhaust: Bool)? = nil
+
+    @State private var animatedWidth: CGFloat = 0
 
     private var color: Color {
-        if utilization >= 80 { return .red }
-        if utilization >= 50 { return .orange }
-        return .green
+        Theme.utilizationColor(utilization)
     }
 
     var body: some View {
@@ -158,11 +352,18 @@ struct UsageWindowRow: View {
                 Text(title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let estimate = exhaustEstimate {
+                    Text(estimate.willExhaust ? "usage.exhaustShort \(estimate.text)" : "usage.safeShort \(estimate.text)")
+                        .font(.caption2)
+                        .foregroundStyle(estimate.willExhaust ? .red : .green)
+                }
                 Spacer()
                 Text("\(Int(utilization))%")
                     .font(.caption)
                     .fontWeight(.medium)
                     .foregroundStyle(color)
+                    .contentTransition(.numericText())
+                    .animation(Theme.quickSpring, value: utilization)
                 if let countdown {
                     Text("usage.resetsIn \(countdown)")
                         .font(.caption2)
@@ -172,15 +373,25 @@ struct UsageWindowRow: View {
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.gray.opacity(0.2))
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(color.opacity(0.8))
-                        .frame(width: max(0, geo.size.width * min(utilization / 100.0, 1.0)))
+                    Capsule()
+                        .fill(Color.gray.opacity(0.15))
+                    Capsule()
+                        .fill(Theme.utilizationGradient(utilization))
+                        .frame(width: animatedWidth)
+                        .shadow(color: utilization >= 80 ? color.opacity(0.4) : .clear, radius: 4)
+                }
+                .onAppear {
+                    withAnimation(Theme.springAnimation) {
+                        animatedWidth = max(0, geo.size.width * min(utilization / 100.0, 1.0))
+                    }
+                }
+                .onChange(of: utilization) { _, newValue in
+                    withAnimation(Theme.springAnimation) {
+                        animatedWidth = max(0, geo.size.width * min(newValue / 100.0, 1.0))
+                    }
                 }
             }
-            .frame(height: 6)
-
+            .frame(height: Theme.progressBarHeight)
         }
     }
 }

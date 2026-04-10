@@ -22,6 +22,7 @@
 "session.new.help" = "New session in same directory";
 "session.resume.help" = "Resume session";
 "session.delete.help" = "Delete session";
+"session.transcript.help" = "View conversation";
 "session.projectCount %lld" = "%lld projects";
 "session.untitled" = "Untitled Session";
 "session.recent" = "Recent";
@@ -99,6 +100,8 @@
 "usage.resetsIn %@" = "resets in %@";
 "usage.exhaustEstimate %@" = "At current rate, exhausts in %@";
 "usage.safeEstimate %@" = "At current rate, resets before exhaustion (%@ remaining)";
+"usage.exhaustShort %@" = "· exhausts in %@";
+"usage.safeShort %@" = "· safe (%@ left)";
 "usage.noData" = "No usage data available";
 "usage.retry" = "Retry";
 "usage.updated %@" = "Updated: %@";
@@ -110,6 +113,8 @@
 "settings.autoRefreshHint" = "The usage API is rate-limited. A longer interval is recommended to avoid errors.";
 "settings.fontSize" = "Font Size";
 "settings.general" = "General";
+"settings.appearance" = "Appearance";
+"settings.customize" = "Customize";
 "settings.launchAtLogin" = "Launch at login";
 "settings.terminal" = "Terminal";
 "settings.resumeIn" = "Resume in";
@@ -130,6 +135,7 @@
 "settings.organization" = "Organization";
 "settings.loading" = "Loading...";
 "settings.tabOrder" = "Tab Order";
+"settings.tabOrderHint" = "Tap a tab then use arrows to reorder";
 "settings.resetDefault" = "Reset to Default";
 "settings.statusLine" = "Status Line";
 "settings.notifications" = "Notifications";
@@ -158,10 +164,12 @@
 "pricing.model" = "Model";
 "pricing.input" = "Input";
 "pricing.output" = "Output";
-"pricing.5mW" = "5m W";
-"pricing.1hW" = "1h W";
-"pricing.read" = "Read";
+"pricing.5mW" = "CW(5m)";
+"pricing.1hW" = "CW(1h)";
+"pricing.read" = "CRead";
 "pricing.save" = "Save";
+"pricing.add" = "Add";
+"pricing.modelId" = "Model ID (e.g. gpt-4o)";
 "pricing.updated %lld" = "Updated %lld models from Anthropic docs";
 
 /* Status Line */
@@ -181,6 +189,13 @@
 "language.en" = "English";
 "language.zhHans" = "简体中文";
 "language.restartHint" = "Restart app to apply language change";
+
+/* Transcript */
+"detail.transcript" = "Chat";
+"transcript.title %lld" = "%lld messages";
+"transcript.search" = "Search in conversation...";
+"transcript.loading" = "Loading messages...";
+"transcript.noMatch" = "No match";
 
 /* Period Names */
 "period.daily" = "Daily";

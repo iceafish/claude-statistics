@@ -15,10 +15,10 @@ final class SessionDataStore: ObservableObject {
 
     // MARK: - Internal state
 
-    private var fileFingerprints: [String: FileFingerprint] = [:]
     private var dirtySessionIds: Set<String> = []
     private var isPopoverVisible = false
     private var watcher: FSEventsWatcher?
+    private let db = DatabaseService.shared
     private let parseQueue: OperationQueue = {
         let q = OperationQueue()
         q.maxConcurrentOperationCount = 1
@@ -27,14 +27,11 @@ final class SessionDataStore: ObservableObject {
         return q
     }()
 
-    struct FileFingerprint {
-        let size: Int64
-        let mtime: Date
-    }
-
     // MARK: - Lifecycle
 
     func start() {
+        db.open()
+
         let projectsDir = (CredentialService.shared.claudeConfigDir() as NSString).appendingPathComponent("projects")
         watcher = FSEventsWatcher(path: projectsDir, debounceSeconds: 2.0) { [weak self] changedPaths in
             Task { @MainActor [weak self] in
@@ -48,6 +45,7 @@ final class SessionDataStore: ObservableObject {
     func stop() {
         watcher?.stop()
         parseQueue.cancelAllOperations()
+        db.close()
     }
 
     // MARK: - Popover visibility
@@ -69,35 +67,71 @@ final class SessionDataStore: ObservableObject {
         parseProgress = "Scanning sessions..."
 
         Task.detached { [weak self] in
+            guard let self else { return }
+            let db = self.db
             let scannedSessions = SessionScanner.shared.scanSessions()
             DiagnosticLogger.shared.appLaunched(sessionCount: scannedSessions.count)
 
-            await MainActor.run {
-                guard let self else { return }
-                self.sessions = scannedSessions
-                self.buildFingerprints()
-                self.parseProgress = "Loading quick stats..."
-            }
-
-            // Quick parse all sessions
+            // Load DB cache and determine which sessions need reparsing
+            let cache = db.loadAllCached()
+            var dirtyIds: [Session] = []
             var quickMap: [String: TranscriptParser.QuickStats] = [:]
+            var statsMap: [String: SessionStats] = [:]
+
             for session in scannedSessions {
-                quickMap[session.id] = TranscriptParser.shared.parseSessionQuick(at: session.filePath)
+                if db.needsReparse(sessionId: session.id, fileSize: session.fileSize, mtime: session.lastModified, cache: cache) {
+                    dirtyIds.append(session)
+                } else if let cached = cache[session.id] {
+                    if let q = cached.quickStats { quickMap[session.id] = q }
+                    if let s = cached.sessionStats { statsMap[session.id] = s }
+                }
             }
 
             await MainActor.run {
-                guard let self else { return }
+                self.sessions = scannedSessions
                 self.quickStats = quickMap
-                self.parseProgress = "Parsing details..."
+                self.parsedStats = statsMap
+                if !statsMap.isEmpty { self.rebucket() }
+                self.parseProgress = dirtyIds.isEmpty ? nil : "Loading..."
             }
 
-            // Full parse all sessions (serial, one at a time)
-            let total = scannedSessions.count
-            for (i, session) in scannedSessions.enumerated() {
-                let stats = TranscriptParser.shared.parseSession(at: session.filePath)
+            if dirtyIds.isEmpty {
+                // Clean up DB entries for deleted sessions
+                let currentIds = Set(scannedSessions.map(\.id))
+                let staleIds = Set(cache.keys).subtracting(currentIds)
+                if !staleIds.isEmpty { db.removeSessions(staleIds) }
 
                 await MainActor.run {
-                    guard let self else { return }
+                    self.isFullParseComplete = true
+                    self.parseProgress = nil
+                    let totalMsgs = self.parsedStats.values.reduce(0) { $0 + $1.messageCount }
+                    let totalToks = self.parsedStats.values.reduce(0) { $0 + $1.totalTokens }
+                    DiagnosticLogger.shared.parsePhaseComplete(
+                        totalSessions: self.parsedStats.count,
+                        totalMessages: totalMsgs,
+                        totalTokens: totalToks
+                    )
+                }
+                return
+            }
+
+            // Quick parse dirty sessions
+            for session in dirtyIds {
+                let quick = TranscriptParser.shared.parseSessionQuick(at: session.filePath)
+                db.saveQuickStats(sessionId: session.id, fileSize: session.fileSize, mtime: session.lastModified, stats: quick)
+                await MainActor.run {
+                    self.quickStats[session.id] = quick
+                }
+            }
+
+            // Full parse + index dirty sessions
+            let total = dirtyIds.count
+            for (i, session) in dirtyIds.enumerated() {
+                let stats = TranscriptParser.shared.parseSession(at: session.filePath)
+                db.saveSessionStats(sessionId: session.id, stats: stats)
+                db.indexSession(sessionId: session.id, filePath: session.filePath)
+
+                await MainActor.run {
                     self.parsedStats[session.id] = stats
                     if (i + 1) % 20 == 0 || i == total - 1 {
                         self.parseProgress = "Parsing \(i + 1)/\(total)..."
@@ -106,8 +140,12 @@ final class SessionDataStore: ObservableObject {
                 }
             }
 
+            // Clean up DB entries for deleted sessions
+            let currentIds = Set(scannedSessions.map(\.id))
+            let staleIds = Set(cache.keys).subtracting(currentIds)
+            if !staleIds.isEmpty { db.removeSessions(staleIds) }
+
             await MainActor.run {
-                guard let self else { return }
                 self.rebucket()
                 self.isFullParseComplete = true
                 self.parseProgress = nil
@@ -126,30 +164,12 @@ final class SessionDataStore: ObservableObject {
     // MARK: - File change handling
 
     private func handleFileChanges(_ changedPaths: Set<String>) {
-        // Map file paths to session ids and detect actual changes
         var changedIds: Set<String> = []
 
         for path in changedPaths {
             let fileName = (path as NSString).lastPathComponent
             guard fileName.hasSuffix(".jsonl") else { continue }
-            let sessionId = (fileName as NSString).deletingPathExtension
-
-            let fm = FileManager.default
-            guard let attrs = try? fm.attributesOfItem(atPath: path) else {
-                // File deleted — will handle in rescan
-                changedIds.insert(sessionId)
-                continue
-            }
-
-            let newSize = attrs[.size] as? Int64 ?? 0
-            let newMtime = attrs[.modificationDate] as? Date ?? Date.distantPast
-
-            if let existing = fileFingerprints[sessionId] {
-                if existing.size == newSize && existing.mtime == newMtime {
-                    continue // No actual change
-                }
-            }
-            changedIds.insert(sessionId)
+            changedIds.insert((fileName as NSString).deletingPathExtension)
         }
 
         guard !changedIds.isEmpty else { return }
@@ -171,36 +191,48 @@ final class SessionDataStore: ObservableObject {
 
     private func processDirtyIds(_ ids: Set<String>) {
         Task.detached { [weak self] in
+            guard let self else { return }
+            let db = self.db
+
             // Rescan to pick up new/deleted files
             let scannedSessions = SessionScanner.shared.scanSessions()
 
             await MainActor.run {
-                guard let self else { return }
                 self.sessions = scannedSessions
-                self.buildFingerprints()
                 self.cleanupDeletedSessions(current: scannedSessions)
             }
 
-            // Quick-parse changed sessions
-            for session in scannedSessions where ids.contains(session.id) {
+            let dirtySessions = scannedSessions.filter { ids.contains($0.id) }
+
+            // Quick-parse + full-parse + index changed sessions
+            let total = dirtySessions.count
+            let showProgress = total > 3
+
+            if showProgress {
+                await MainActor.run { self.parseProgress = "Updating..." }
+            }
+
+            for (i, session) in dirtySessions.enumerated() {
                 let quick = TranscriptParser.shared.parseSessionQuick(at: session.filePath)
-                await MainActor.run {
-                    self?.quickStats[session.id] = quick
-                }
-            }
+                db.saveQuickStats(sessionId: session.id, fileSize: session.fileSize, mtime: session.lastModified, stats: quick)
+                await MainActor.run { self.quickStats[session.id] = quick }
 
-            // Full-parse changed sessions
-            for session in scannedSessions where ids.contains(session.id) {
                 let stats = TranscriptParser.shared.parseSession(at: session.filePath)
+                db.saveSessionStats(sessionId: session.id, stats: stats)
+                db.indexSession(sessionId: session.id, filePath: session.filePath)
                 await MainActor.run {
-                    guard let self else { return }
                     self.parsedStats[session.id] = stats
+                    if showProgress {
+                        self.parseProgress = "Updating \(i + 1)/\(total)..."
+                    }
                 }
             }
 
-            await MainActor.run {
-                self?.rebucket()
+            if showProgress {
+                await MainActor.run { self.parseProgress = nil }
             }
+
+            await MainActor.run { self.rebucket() }
         }
     }
 
@@ -261,8 +293,8 @@ final class SessionDataStore: ObservableObject {
         for id in ids {
             quickStats.removeValue(forKey: id)
             parsedStats.removeValue(forKey: id)
-            fileFingerprints.removeValue(forKey: id)
         }
+        db.removeSessions(ids)
         rebucket()
     }
 
@@ -276,47 +308,46 @@ final class SessionDataStore: ObservableObject {
         dirtySessionIds.removeAll()
         parseQueue.cancelAllOperations()
         isFullParseComplete = false
+        db.resetDatabase()
+        quickStats.removeAll()
+        parsedStats.removeAll()
         initialLoad()
     }
 
     // MARK: - Helpers
 
-    private func buildFingerprints() {
-        fileFingerprints.removeAll()
-        for session in sessions {
-            fileFingerprints[session.id] = FileFingerprint(
-                size: session.fileSize,
-                mtime: session.lastModified
-            )
-        }
-    }
-
     private func cleanupDeletedSessions(current: [Session]) {
         let currentIds = Set(current.map(\.id))
         let staleIds = Set(parsedStats.keys).subtracting(currentIds)
+        if staleIds.isEmpty { return }
         for id in staleIds {
             parsedStats.removeValue(forKey: id)
             quickStats.removeValue(forKey: id)
-            fileFingerprints.removeValue(forKey: id)
         }
+        db.removeSessions(staleIds)
+    }
+
+    /// Search messages via FTS index
+    func searchMessages(query: String) -> [DatabaseService.SearchResult] {
+        db.search(query: query)
     }
 
     // MARK: - Computed (convenience for views)
 
     var allTimeCost: Double {
-        periodStats.reduce(0) { $0 + $1.totalCost }
+        parsedStats.values.reduce(0) { $0 + $1.estimatedCost }
     }
 
     var allTimeSessions: Int {
-        periodStats.reduce(0) { $0 + $1.sessionCount }
+        parsedStats.count
     }
 
     var allTimeTokens: Int {
-        periodStats.reduce(0) { $0 + $1.totalTokens }
+        parsedStats.values.reduce(0) { $0 + $1.totalTokens }
     }
 
     var allTimeMessages: Int {
-        periodStats.reduce(0) { $0 + $1.messageCount }
+        parsedStats.values.reduce(0) { $0 + $1.messageCount }
     }
 
     var visibleStats: [PeriodStats] {
@@ -330,22 +361,26 @@ final class SessionDataStore: ObservableObject {
     /// Aggregate trend data for a given period from parsed session stats
     func aggregateTrendData(for period: PeriodStats, periodType: StatsPeriod) -> [TrendDataPoint] {
         let granularity = periodType.trendGranularity
-
         var buckets: [Date: (tokens: Int, cost: Double)] = [:]
 
+        // Daily view → fiveMinSlices; weekly/monthly/yearly → daySlices
+        let useFineSlices = periodType == .daily
+
         for (sessionId, stats) in parsedStats {
-            if !stats.daySlices.isEmpty {
-                for (dayStart, slice) in stats.daySlices {
-                    let slicePeriodStart = periodType.startOfPeriod(for: dayStart)
+            let slices: [Date: SessionStats.DaySlice] = useFineSlices ? stats.fiveMinSlices : stats.daySlices
+            if !slices.isEmpty {
+                for (sliceTime, slice) in slices {
+                    let slicePeriodStart = periodType.startOfPeriod(for: sliceTime)
                     guard slicePeriodStart == period.period else { continue }
 
-                    let bucket = granularity.bucketStart(for: dayStart)
+                    let bucket = granularity.bucketStart(for: sliceTime)
                     var existing = buckets[bucket, default: (tokens: 0, cost: 0)]
                     existing.tokens += slice.totalTokens
                     existing.cost += slice.estimatedCost
                     buckets[bucket] = existing
                 }
             } else {
+                // Fallback for sessions without hourSlice data
                 guard let session = sessions.first(where: { $0.id == sessionId }) else { continue }
                 let sessionDate = stats.startTime ?? session.lastModified
                 let sessionPeriodStart = periodType.startOfPeriod(for: sessionDate)
@@ -361,13 +396,140 @@ final class SessionDataStore: ObservableObject {
 
         // Sort by time, then accumulate into running totals
         let sorted = buckets.sorted { $0.key < $1.key }
+        let cal = Calendar.current
+        var result: [TrendDataPoint] = []
+
+        // Zero-origin at the period start
+        if !sorted.isEmpty {
+            result.append(TrendDataPoint(time: period.period, tokens: 0, cost: 0))
+        }
+
+        // Data points at the END of each bucket (cumulative up to that point)
         var cumTokens = 0
         var cumCost = 0.0
-        return sorted.map { (time, val) in
+        for (i, (time, val)) in sorted.enumerated() {
             cumTokens += val.tokens
             cumCost += val.cost
-            return TrendDataPoint(time: time, tokens: cumTokens, cost: cumCost)
+            // End of bucket = start of next granularity unit
+            // For the last bucket, cap at "now" to avoid showing future time
+            let bucketEnd = cal.date(byAdding: granularity.calendarComponent, value: granularity.stepValue, to: time)!
+            let dataTime = (i == sorted.count - 1) ? min(bucketEnd, Date()) : bucketEnd
+            result.append(TrendDataPoint(time: dataTime, tokens: cumTokens, cost: cumCost))
         }
+        return result
+    }
+
+    /// Aggregate raw token/cost usage for a rolling time window.
+    func aggregateWindowTrendData(from start: Date, to end: Date, granularity: TrendGranularity, cumulative: Bool = false, modelFilter: ((String) -> Bool)? = nil) -> [TrendDataPoint] {
+        guard start < end else { return [] }
+
+        let cal = Calendar.current
+        let useFineSlices = granularity == .fiveMinute || granularity == .minute || granularity == .hour
+        let sliceDuration: TimeInterval = useFineSlices ? 5 * 60 : 24 * 3600
+        var buckets: [Date: (tokens: Int, cost: Double)] = [:]
+
+        for stats in parsedStats.values {
+            let slices: [Date: SessionStats.DaySlice] = useFineSlices ? stats.fiveMinSlices : stats.daySlices
+            for (sliceTime, slice) in slices {
+                let sliceEnd = sliceTime.addingTimeInterval(sliceDuration)
+                guard sliceEnd > start, sliceTime < end else { continue }
+
+                let bucket = granularity.bucketStart(for: sliceTime)
+                var existing = buckets[bucket, default: (tokens: 0, cost: 0)]
+
+                if let filter = modelFilter {
+                    for (model, modelStats) in slice.modelBreakdown where filter(model) {
+                        existing.tokens += modelStats.totalTokens
+                        existing.cost += ModelPricing.estimateCost(
+                            model: model,
+                            inputTokens: modelStats.inputTokens,
+                            outputTokens: modelStats.outputTokens,
+                            cacheCreation5mTokens: modelStats.cacheCreation5mTokens,
+                            cacheCreation1hTokens: modelStats.cacheCreation1hTokens,
+                            cacheCreationTotalTokens: modelStats.cacheCreationTotalTokens,
+                            cacheReadTokens: modelStats.cacheReadTokens
+                        )
+                    }
+                } else {
+                    existing.tokens += slice.totalTokens
+                    existing.cost += slice.estimatedCost
+                }
+                buckets[bucket] = existing
+            }
+        }
+
+        if cumulative {
+            var result: [TrendDataPoint] = [TrendDataPoint(time: start, tokens: 0, cost: 0)]
+            var bucketTime = granularity.bucketStart(for: start)
+            var cumTokens = 0
+            var cumCost = 0.0
+
+            while bucketTime < end {
+                let bucket = buckets[bucketTime, default: (tokens: 0, cost: 0)]
+                cumTokens += bucket.tokens
+                cumCost += bucket.cost
+                // Only add points after the zero-origin to keep x-axis monotonic
+                if bucketTime > start {
+                    result.append(TrendDataPoint(time: bucketTime, tokens: cumTokens, cost: cumCost))
+                }
+                guard let nextBucket = cal.date(byAdding: granularity.calendarComponent, value: granularity.stepValue, to: bucketTime) else { break }
+                bucketTime = nextBucket
+            }
+
+            // Data from the first partial bucket was accumulated but not yet plotted.
+            // Show it at the next bucket boundary (already included in cumTokens/cumCost above).
+            return result
+        }
+
+        // Non-cumulative: per-bucket values
+        var result: [TrendDataPoint] = []
+        var bucketTime = granularity.bucketStart(for: start)
+
+        while bucketTime < end {
+            let bucket = buckets[bucketTime, default: (tokens: 0, cost: 0)]
+            result.append(TrendDataPoint(time: bucketTime, tokens: bucket.tokens, cost: bucket.cost))
+            guard let nextBucket = cal.date(byAdding: granularity.calendarComponent, value: granularity.stepValue, to: bucketTime) else { break }
+            bucketTime = nextBucket
+        }
+
+        return result
+    }
+
+    func windowModelBreakdown(from start: Date, to end: Date, modelFilter: ((String) -> Bool)? = nil) -> [ModelUsage] {
+        guard start < end else { return [] }
+
+        let useFineSlices = true // always use fine slices for window queries
+        let sliceDuration: TimeInterval = 5 * 60
+        var combined: [String: ModelUsage] = [:]
+
+        for stats in parsedStats.values {
+            let slices: [Date: SessionStats.DaySlice] = useFineSlices ? stats.fiveMinSlices : stats.daySlices
+            for (sliceTime, slice) in slices {
+                let sliceEnd = sliceTime.addingTimeInterval(sliceDuration)
+                guard sliceEnd > start, sliceTime < end else { continue }
+
+                for (model, modelStats) in slice.modelBreakdown {
+                    if let filter = modelFilter, !filter(model) { continue }
+                    var existing = combined[model] ?? ModelUsage(model: model)
+                    existing.inputTokens += modelStats.inputTokens
+                    existing.outputTokens += modelStats.outputTokens
+                    existing.cacheCreationTotalTokens += modelStats.cacheCreationTotalTokens
+                    existing.cacheReadTokens += modelStats.cacheReadTokens
+                    existing.cost += ModelPricing.estimateCost(
+                        model: model,
+                        inputTokens: modelStats.inputTokens,
+                        outputTokens: modelStats.outputTokens,
+                        cacheCreation5mTokens: modelStats.cacheCreation5mTokens,
+                        cacheCreation1hTokens: modelStats.cacheCreation1hTokens,
+                        cacheCreationTotalTokens: modelStats.cacheCreationTotalTokens,
+                        cacheReadTokens: modelStats.cacheReadTokens
+                    )
+                    existing.messageCount += modelStats.messageCount
+                    combined[model] = existing
+                }
+            }
+        }
+        return combined.values.sorted { $0.totalTokens > $1.totalTokens }
     }
 
     var globalModelBreakdown: [ModelUsage] {

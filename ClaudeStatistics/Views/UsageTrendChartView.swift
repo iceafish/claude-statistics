@@ -1,9 +1,12 @@
 import SwiftUI
 import Charts
 
-struct TrendChartView: View {
+/// Cumulative dual-axis chart for subscription usage windows (5h / 7d).
+struct UsageTrendChartView: View {
     let dataPoints: [TrendDataPoint]
     let granularity: TrendGranularity
+    let windowStart: Date
+    let windowEnd: Date
 
     @State private var hoverDate: Date?
     @State private var hoverValues: (tokens: Int, cost: Double)?
@@ -16,18 +19,23 @@ struct TrendChartView: View {
     private var maxCost: Double {
         dataPoints.map(\.cost).max() ?? 0
     }
-    /// Scale factor to normalize cost into the token value range
     private var scaleFactor: Double {
         guard maxCost > 0, maxTokens > 0 else { return 1.0 }
         return Double(maxTokens) / maxCost
     }
+    /// Small domain padding so centered edge labels aren't clipped
+    private var domainPadding: TimeInterval {
+        windowEnd.timeIntervalSince(windowStart) * 0.05
+    }
+    private var xDomainStart: Date { windowStart.addingTimeInterval(-domainPadding) }
+    private var xDomainEnd: Date { windowEnd.addingTimeInterval(domainPadding) }
 
     var body: some View {
-        if dataPoints.isEmpty {
+        if dataPoints.isEmpty || (maxTokens == 0 && maxCost == 0) {
             emptyState
         } else {
             chartContent
-                .frame(height: 200)
+                .frame(height: 180)
                 .mask(alignment: .leading) {
                     GeometryReader { geo in
                         Rectangle()
@@ -64,7 +72,7 @@ struct TrendChartView: View {
             }
             Spacer()
         }
-        .frame(height: 100)
+        .frame(height: 80)
     }
 
     @ViewBuilder
@@ -78,60 +86,43 @@ struct TrendChartView: View {
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
             }
             ForEach(dataPoints) { point in
-                if dataPoints.count == 1 {
-                    if maxTokens > 0 {
-                        PointMark(
-                            x: .value("Time", point.time),
-                            y: .value("Tokens", point.tokens)
-                        )
-                        .foregroundStyle(.blue)
-                        .symbolSize(30)
-                    }
-                    if maxCost > 0 {
-                        PointMark(
-                            x: .value("Time", point.time),
-                            y: .value("Tokens", useSingleAxis ? Int(point.cost * 1000) : Int(point.cost * scaleFactor))
-                        )
-                        .foregroundStyle(.orange)
-                        .symbolSize(30)
-                    }
-                } else {
-                    if maxTokens > 0 {
-                        LineMark(
-                            x: .value("Time", point.time),
-                            y: .value("Tokens", point.tokens),
-                            series: .value("Series", "Tokens")
-                        )
-                        .foregroundStyle(.blue)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
-                        .interpolationMethod(.catmullRom)
-                    }
-                    if maxCost > 0 {
-                        LineMark(
-                            x: .value("Time", point.time),
-                            y: .value("Tokens", useSingleAxis ? Int(point.cost * 1000) : Int(point.cost * scaleFactor)),
-                            series: .value("Series", "Cost")
-                        )
-                        .foregroundStyle(.orange)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
-                        .interpolationMethod(.catmullRom)
-                    }
+                if maxTokens > 0 {
+                    LineMark(
+                        x: .value("Time", point.time),
+                        y: .value("Tokens", point.tokens),
+                        series: .value("Series", "Tokens")
+                    )
+                    .foregroundStyle(.blue)
+                    .lineStyle(StrokeStyle(lineWidth: 1.5))
+                    .interpolationMethod(.monotone)
+                }
+
+                if maxCost > 0 {
+                    LineMark(
+                        x: .value("Time", point.time),
+                        y: .value("Tokens", useSingleAxis ? Int(point.cost * 1000) : Int(point.cost * scaleFactor)),
+                        series: .value("Series", "Cost")
+                    )
+                    .foregroundStyle(.orange)
+                    .lineStyle(StrokeStyle(lineWidth: 1.5))
+                    .interpolationMethod(.monotone)
                 }
             }
         }
+        .chartXScale(domain: xDomainStart...xDomainEnd)
         .chartXAxis {
-            AxisMarks(values: .automatic) { value in
+            AxisMarks(values: xAxisValues) { value in
                 AxisGridLine()
-                AxisValueLabel {
+                AxisValueLabel(anchor: .top) {
                     if let date = value.as(Date.self) {
-                        Text(formatAxisDate(date))
+                        Text(formatXAxisLabel(date))
                             .font(.system(size: 9))
+                            .multilineTextAlignment(.center)
                     }
                 }
             }
         }
         .chartYAxis {
-            // Left axis: tokens
             AxisMarks(position: .leading) { value in
                 AxisGridLine()
                 AxisValueLabel {
@@ -142,7 +133,6 @@ struct TrendChartView: View {
                     }
                 }
             }
-            // Right axis: cost (reverse-mapped from normalized values)
             if !useSingleAxis {
                 AxisMarks(position: .trailing) { value in
                     AxisValueLabel {
@@ -212,7 +202,7 @@ struct TrendChartView: View {
     @ViewBuilder
     private func chartTooltip(date: Date, tokens: Int, cost: Double) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(formatAxisDate(date))
+            Text(formatTooltipDate(date))
                 .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(.secondary)
             if maxTokens > 0 {
@@ -244,9 +234,65 @@ struct TrendChartView: View {
         }
     }
 
-    private func formatAxisDate(_ date: Date) -> String {
+    private var xAxisValues: [Date] {
+        let cal = Calendar.current
+        let comp = granularity.axisMarkComponent
+        let step = granularity.axisMarkCount
+
+        let refDate = cal.date(byAdding: comp, value: step, to: windowStart) ?? windowStart
+        let strideInterval = refDate.timeIntervalSince(windowStart)
+        let minDistance = strideInterval * 0.5
+
+        var values: [Date] = [windowStart]
+
+        let axisBucket = TrendGranularity(rawValue: granularity.rawValue == "fiveMinute" ? "hour" : (granularity.rawValue == "hour" ? "day" : granularity.rawValue))!
+        var markTime = axisBucket.bucketStart(for: windowStart)
+        if let next = cal.date(byAdding: comp, value: step, to: markTime) {
+            markTime = next
+        }
+
+        while markTime < windowEnd {
+            let fromStart = markTime.timeIntervalSince(windowStart)
+            let fromEnd = windowEnd.timeIntervalSince(markTime)
+            if fromStart > minDistance && fromEnd > minDistance {
+                values.append(markTime)
+            }
+            guard let next = cal.date(byAdding: comp, value: step, to: markTime) else { break }
+            markTime = next
+        }
+
+        values.append(windowEnd)
+        return values
+    }
+
+    private func formatTooltipDate(_ date: Date) -> String {
+        if granularity == .fiveMinute {
+            return DateFormatter.with("HH:mm").string(from: date)
+        }
+        return DateFormatter.with("MM/dd HH:mm").string(from: date)
+    }
+
+    private func formatXAxisLabel(_ date: Date) -> String {
+        let cal = Calendar.current
+        let isStart = abs(date.timeIntervalSince(windowStart)) < 1
+        let isEnd = abs(date.timeIntervalSince(windowEnd)) < 1
+
+        if isStart || isEnd {
+            let comps = cal.dateComponents([.hour, .minute], from: date)
+            let isMidnight = comps.hour == 0 && (comps.minute ?? 0) == 0
+            if granularity == .fiveMinute {
+                return isMidnight ? "24:00" : DateFormatter.with("HH:mm").string(from: date)
+            } else {
+                // Two-line label for 7d: "MM/dd\nHH:mm"
+                let dayDate = isMidnight ? cal.date(byAdding: .day, value: -1, to: date)! : date
+                let dayStr = DateFormatter.with("MM/dd").string(from: dayDate)
+                let timeStr = isMidnight ? "24:00" : DateFormatter.with("HH:mm").string(from: date)
+                return "\(dayStr)\n\(timeStr)"
+            }
+        }
+
         let fmt = DateFormatter()
-        fmt.dateFormat = granularity.dateFormatString
+        fmt.dateFormat = granularity.axisLabelFormat
         return fmt.string(from: date)
     }
 
@@ -260,5 +306,42 @@ struct TrendChartView: View {
         if cost >= 1.0 { return String(format: "$%.1f", cost) }
         if cost >= 0.01 { return String(format: "$%.2f", cost) }
         return String(format: "$%.3f", cost)
+    }
+}
+
+extension TrendGranularity {
+    /// Calendar component for axis marks (may differ from data granularity)
+    var axisMarkComponent: Calendar.Component {
+        switch self {
+        case .fiveMinute: return .hour   // hourly marks for 5h window
+        case .hour: return .day          // daily marks for 7d hourly view
+        default: return calendarComponent
+        }
+    }
+
+    /// Axis mark stride count
+    var axisMarkCount: Int {
+        switch self {
+        case .day: return 2
+        case .hour: return 1    // daily marks for 7d hourly view
+        default: return 1
+        }
+    }
+
+    /// Axis label date format (may differ from data dateFormatString)
+    var axisLabelFormat: String {
+        switch self {
+        case .fiveMinute: return "HH:00"
+        case .hour: return "MM/dd"       // daily labels for 7d hourly view
+        default: return dateFormatString
+        }
+    }
+}
+
+private extension DateFormatter {
+    static func with(_ format: String) -> DateFormatter {
+        let fmt = DateFormatter()
+        fmt.dateFormat = format
+        return fmt
     }
 }

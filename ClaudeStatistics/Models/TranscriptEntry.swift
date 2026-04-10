@@ -9,14 +9,17 @@ struct TranscriptEntry: Codable {
     let uuid: String?
     let slug: String?
     let customTitle: String?
+    // queue-operation fields
+    let operation: String?
+    let content: String?
 
     enum CodingKeys: String, CodingKey {
         case type, timestamp, sessionId, message, lastPrompt, uuid, slug, customTitle
+        case operation, content
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        // Use try? per field so one bad field doesn't discard the entire entry
         type = try? container.decodeIfPresent(String.self, forKey: .type)
         timestamp = try? container.decodeIfPresent(String.self, forKey: .timestamp)
         sessionId = try? container.decodeIfPresent(String.self, forKey: .sessionId)
@@ -25,6 +28,13 @@ struct TranscriptEntry: Codable {
         uuid = try? container.decodeIfPresent(String.self, forKey: .uuid)
         slug = try? container.decodeIfPresent(String.self, forKey: .slug)
         customTitle = try? container.decodeIfPresent(String.self, forKey: .customTitle)
+        operation = try? container.decodeIfPresent(String.self, forKey: .operation)
+        // content can be string or array (for user messages with images)
+        if let str = try? container.decodeIfPresent(String.self, forKey: .content) {
+            content = str
+        } else {
+            content = nil
+        }
     }
 
     var timestampDate: Date? {

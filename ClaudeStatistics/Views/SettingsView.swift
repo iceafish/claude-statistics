@@ -60,7 +60,22 @@ struct SettingsView: View {
             Divider()
 
             Form {
+            // Terminal + Launch at Login
             Section("settings.general") {
+                Picker("settings.resumeIn", selection: $preferredTerminal) {
+                    ForEach(TerminalApp.allCases) { app in
+                        if app != .auto && !app.isInstalled {
+                            Text("settings.notFound \(app.rawValue)")
+                                .tag(app.rawValue)
+                        } else {
+                            Text(app.rawValue)
+                                .tag(app.rawValue)
+                        }
+                    }
+                }
+                .pickerStyle(.menu)
+                .font(.system(size: 12))
+
                 Toggle("settings.launchAtLogin", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, newValue in
                         do {
@@ -75,22 +90,7 @@ struct SettingsView: View {
                     }
             }
 
-            Section("settings.terminal") {
-                Picker("settings.resumeIn", selection: $preferredTerminal) {
-                    ForEach(TerminalApp.allCases) { app in
-                        if app != .auto && !app.isInstalled {
-                            Text("settings.notFound \(app.rawValue)")
-                                .tag(app.rawValue)
-                        } else {
-                            Text(app.rawValue)
-                                .tag(app.rawValue)
-                        }
-                    }
-                }
-                .pickerStyle(.menu)
-                .font(.system(size: 12))
-            }
-
+            // Auto Refresh
             Section("settings.autoRefresh") {
                 Toggle("settings.enableAutoRefresh", isOn: $autoRefreshEnabled)
                     .onChange(of: autoRefreshEnabled) { _, newValue in
@@ -277,7 +277,8 @@ struct SettingsView: View {
                 .padding(.vertical, 4)
             }
 
-            Section("settings.language") {
+            // Language + Font Size
+            Section("settings.appearance") {
                 Picker("settings.language", selection: $appLanguage) {
                     Text("language.auto").tag("auto")
                     Text("language.en").tag("en")
@@ -288,10 +289,10 @@ struct SettingsView: View {
                 .onChange(of: appLanguage) { _, newValue in
                     LanguageManager.apply(newValue)
                 }
-            }
 
-            Section("settings.fontSize") {
                 HStack(spacing: 8) {
+                    Text("settings.fontSize")
+                        .font(.system(size: 12))
                     Image(systemName: "textformat.size.smaller")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
@@ -299,24 +300,22 @@ struct SettingsView: View {
                     Image(systemName: "textformat.size.larger")
                         .font(.system(size: 14))
                         .foregroundStyle(.secondary)
-                }
-
-                HStack {
                     Text(String(format: "%.0f%%", fontScale * 100))
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
-                    Spacer()
+                        .frame(width: 36)
                     if fontScale != 1.0 {
                         Button("settings.resetDefault") {
                             fontScale = 1.0
                         }
-                        .font(.system(size: 11))
+                        .font(.system(size: 10))
                         .buttonStyle(.plain)
                         .foregroundStyle(.blue)
                     }
                 }
             }
 
+            // Pricing
             Section("settings.pricing") {
                 Button(action: { showPricing = true }) {
                     HStack {
@@ -331,19 +330,13 @@ struct SettingsView: View {
                     .font(.system(size: 12))
                 }
                 .buttonStyle(.plain)
-
-                Text("settings.pricingSource")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
             }
 
-            Section("settings.statusLine") {
+            // Status Line + Tab Order
+            Section("settings.customize") {
                 StatusLineSection()
-            }
 
-            Section("settings.tabOrder") {
                 TabOrderEditor(tabOrder: $tabOrder)
-
                 Button("settings.resetDefault") {
                     tabOrder = AppTab.defaultOrder
                     AppTab.saveOrder(tabOrder)
@@ -352,33 +345,7 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
             }
 
-            Section("settings.diagnostics") {
-                Button(action: {
-                    let logPath = DiagnosticLogger.shared.logFilePath
-                    if FileManager.default.fileExists(atPath: logPath) {
-                        NSWorkspace.shared.selectFile(logPath, inFileViewerRootedAtPath: "")
-                    } else {
-                        // Create empty log and open containing folder
-                        FileManager.default.createFile(atPath: logPath, contents: nil)
-                        NSWorkspace.shared.selectFile(logPath, inFileViewerRootedAtPath: "")
-                    }
-                }) {
-                    HStack {
-                        Label("settings.exportLog", systemImage: "doc.text.magnifyingglass")
-                        Spacer()
-                        Image(systemName: "arrow.up.forward.square")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .font(.system(size: 12))
-                }
-                .buttonStyle(.plain)
-
-                Text("settings.exportLogHint")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-
+            // About + Diagnostics
             Section("settings.about") {
                 HStack {
                     Text("settings.version")
@@ -420,6 +387,26 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!updaterService.canCheckForUpdates)
+
+                Button(action: {
+                    let logPath = DiagnosticLogger.shared.logFilePath
+                    if FileManager.default.fileExists(atPath: logPath) {
+                        NSWorkspace.shared.selectFile(logPath, inFileViewerRootedAtPath: "")
+                    } else {
+                        FileManager.default.createFile(atPath: logPath, contents: nil)
+                        NSWorkspace.shared.selectFile(logPath, inFileViewerRootedAtPath: "")
+                    }
+                }) {
+                    HStack {
+                        Label("settings.exportLog", systemImage: "doc.text.magnifyingglass")
+                        Spacer()
+                        Image(systemName: "arrow.up.forward.square")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
             }
         }
         .formStyle(.grouped)
@@ -433,8 +420,15 @@ struct SettingsView: View {
             // Avatar
             ZStack {
                 Circle()
-                    .fill(Color.blue.opacity(0.15))
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.blue.opacity(0.2), Color.purple.opacity(0.15)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                     .frame(width: 36, height: 36)
+                    .shadow(color: .blue.opacity(0.15), radius: 4, y: 1)
                 Text(avatarInitial)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.blue)
@@ -459,17 +453,17 @@ struct SettingsView: View {
                             Text(org.orgTypeDisplayName)
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(.secondary)
-                                .padding(.horizontal, 5)
+                                .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.gray.opacity(0.12))
-                                .cornerRadius(4)
+                                .background(Color.gray.opacity(0.1))
+                                .clipShape(Capsule())
                             Text(org.tierDisplayName)
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(.blue)
-                                .padding(.horizontal, 5)
+                                .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(Color.blue.opacity(0.1))
-                                .cornerRadius(4)
+                                .clipShape(Capsule())
                         }
                     }
                     if let orgName = profile.organization?.name {
@@ -514,8 +508,9 @@ struct SettingsView: View {
             }
         }
         .padding(10)
-        .background(Color.gray.opacity(0.06))
-        .cornerRadius(8)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+        .shadow(color: Theme.cardShadowColor, radius: Theme.cardShadowRadius, y: Theme.cardShadowY)
     }
 
     private var avatarInitial: String {
@@ -822,45 +817,66 @@ struct SettingsView: View {
 struct TabOrderEditor: View {
     @Binding var tabOrder: [AppTab]
     @State private var selectedTab: AppTab?
+    @State private var hoveredTab: AppTab?
 
     var body: some View {
-        ForEach(tabOrder) { tab in
-            HStack(spacing: 8) {
-                Image(systemName: tab.icon)
-                    .frame(width: 16)
-                    .foregroundStyle(selectedTab == tab ? Color.blue : .secondary)
-                Text(tab.localizedName)
-                    .font(.system(size: 12))
-                Spacer()
+        VStack(alignment: .leading, spacing: 6) {
+            Text("settings.tabOrderHint")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
 
-                if selectedTab == tab {
-                    HStack(spacing: 12) {
-                        Button(action: { move(tab, direction: -1) }) {
-                            Image(systemName: "arrow.up")
-                                .font(.system(size: 11, weight: .medium))
+            HStack(spacing: 0) {
+                ForEach(tabOrder) { tab in
+                    let isSelected = selectedTab == tab
+                    HStack(spacing: 4) {
+                        if isSelected {
+                            arrowButton(direction: -1, tab: tab)
                         }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(tabOrder.first == tab ? Color.gray.opacity(0.3) : Color.blue)
-                        .disabled(tabOrder.first == tab)
 
-                        Button(action: { move(tab, direction: 1) }) {
-                            Image(systemName: "arrow.down")
-                                .font(.system(size: 11, weight: .medium))
+                        VStack(spacing: 3) {
+                            Image(systemName: tab.icon)
+                                .font(.system(size: 14))
+                            Text(tab.localizedName)
+                                .font(.system(size: 9))
                         }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(tabOrder.last == tab ? Color.gray.opacity(0.3) : Color.blue)
-                        .disabled(tabOrder.last == tab)
+
+                        if isSelected {
+                            arrowButton(direction: 1, tab: tab)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 5)
+                    .background(isSelected ? Color.blue.opacity(0.2) : Color.clear)
+                    .cornerRadius(6)
+                    .foregroundStyle(isSelected ? .blue : .secondary)
+                    .contentShape(Rectangle())
+                    .scaleEffect(hoveredTab == tab ? 1.15 : 1.0)
+                    .animation(.spring(duration: 0.2, bounce: 0.3), value: hoveredTab)
+                    .onHover { isHovered in
+                        hoveredTab = isHovered ? tab : nil
+                    }
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            selectedTab = selectedTab == tab ? nil : tab
+                        }
                     }
                 }
             }
-            .padding(.vertical, 2)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    selectedTab = selectedTab == tab ? nil : tab
-                }
-            }
         }
+    }
+
+    private func arrowButton(direction: Int, tab: AppTab) -> some View {
+        let isDisabled = direction < 0 ? tabOrder.first == tab : tabOrder.last == tab
+        let icon = direction < 0 ? "chevron.left" : "chevron.right"
+        return Button(action: { move(tab, direction: direction) }) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .bold))
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.hoverScale)
+        .foregroundStyle(isDisabled ? Color.gray.opacity(0.3) : .white)
+        .disabled(isDisabled)
     }
 
     private func move(_ tab: AppTab, direction: Int) {
@@ -889,6 +905,8 @@ struct PricingManageView: View {
     @State private var editCache5m = ""
     @State private var editCache1h = ""
     @State private var editCacheRead = ""
+    @State private var showAddModel = false
+    @State private var newModelId = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -911,6 +929,18 @@ struct PricingManageView: View {
                     ProgressView()
                         .scaleEffect(0.6)
                 }
+
+                Button(action: {
+                    showAddModel = true
+                    newModelId = ""
+                    editInput = "3"; editOutput = "15"
+                    editCache5m = "3.75"; editCache1h = "6"; editCacheRead = "0.3"
+                }) {
+                    Label("pricing.add", systemImage: "plus")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
 
                 Button(action: fetchRemote) {
                     Label("pricing.fetchLatest", systemImage: "arrow.triangle.2.circlepath")
@@ -936,6 +966,41 @@ struct PricingManageView: View {
             }
 
             Divider()
+
+            // Add model form
+            if showAddModel {
+                VStack(spacing: 6) {
+                    HStack {
+                        TextField("pricing.modelId", text: $newModelId)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 11, design: .monospaced))
+                    }
+                    HStack(spacing: 4) {
+                        editField("pricing.input", text: $editInput)
+                        editField("pricing.output", text: $editOutput)
+                        editField("pricing.5mW", text: $editCache5m)
+                        editField("pricing.1hW", text: $editCache1h)
+                        editField("pricing.read", text: $editCacheRead)
+                    }
+                    HStack {
+                        Button("session.cancel") {
+                            showAddModel = false
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("pricing.save") {
+                            saveNewModel()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(newModelId.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.green.opacity(0.05))
+            }
 
             // Pricing table
             ScrollView {
@@ -1001,6 +1066,14 @@ struct PricingManageView: View {
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
             .padding(.leading, 6)
+
+            Button(action: { deleteModel(item.id) }) {
+                Image(systemName: "trash")
+                    .font(.system(size: 9))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.red.opacity(0.6))
+            .padding(.leading, 2)
         }
         .font(.system(size: 11, design: .monospaced))
         .padding(.horizontal, 12)
@@ -1082,6 +1155,30 @@ struct PricingManageView: View {
         )
         ModelPricing.shared.updateModel(id: modelId, pricing: pricing)
         editingModel = nil
+        loadModels()
+    }
+
+    private func saveNewModel() {
+        let id = newModelId.trimmingCharacters(in: .whitespaces)
+        guard !id.isEmpty,
+              let input = Double(editInput),
+              let output = Double(editOutput),
+              let c5m = Double(editCache5m),
+              let c1h = Double(editCache1h),
+              let cRead = Double(editCacheRead) else { return }
+
+        let pricing = ModelPricing.Pricing(
+            input: input, output: output,
+            cacheWrite5m: c5m, cacheWrite1h: c1h,
+            cacheRead: cRead
+        )
+        ModelPricing.shared.updateModel(id: id, pricing: pricing)
+        showAddModel = false
+        loadModels()
+    }
+
+    private func deleteModel(_ id: String) {
+        ModelPricing.shared.removeModel(id: id)
         loadModels()
     }
 

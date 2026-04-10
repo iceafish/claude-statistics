@@ -3,6 +3,7 @@ import Foundation
 
 enum TerminalApp: String, CaseIterable, Identifiable {
     case auto = "Auto"
+    case ghostty = "Ghostty"
     case iterm = "iTerm2"
     case terminal = "Terminal"
     case warp = "Warp"
@@ -24,6 +25,7 @@ enum TerminalApp: String, CaseIterable, Identifiable {
     var isInstalled: Bool {
         switch self {
         case .auto: return true
+        case .ghostty: return NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.mitchellh.ghostty") != nil
         case .iterm: return NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.googlecode.iterm2") != nil
         case .terminal: return true // always available
         case .warp: return NSWorkspace.shared.urlForApplication(withBundleIdentifier: "dev.warp.Warp-Stable") != nil
@@ -56,13 +58,17 @@ enum TerminalLauncher {
         let preferred = TerminalApp.preferred
         switch preferred {
         case .auto:
-            if TerminalApp.iterm.isInstalled {
+            if TerminalApp.ghostty.isInstalled {
+                openInGhostty(cwd: cwd, claudeArgs: claudeArgs)
+            } else if TerminalApp.iterm.isInstalled {
                 openInITerm(command: command)
             } else if TerminalApp.warp.isInstalled {
                 openInWarp(cwd: cwd, claudeArgs: claudeArgs)
             } else {
                 openInTerminalApp(command: command)
             }
+        case .ghostty:
+            openInGhostty(cwd: cwd, claudeArgs: claudeArgs)
         case .iterm:
             openInITerm(command: command)
         case .terminal:
@@ -74,6 +80,25 @@ enum TerminalLauncher {
         case .alacritty:
             openInAlacritty(command: command, cwd: cwd)
         }
+    }
+
+    // MARK: - Ghostty
+
+    private static func openInGhostty(cwd: String, claudeArgs: String) {
+        let claudeCommand = "claude" + (claudeArgs.isEmpty ? "" : " \(claudeArgs)")
+        let scriptPath = (cwd as NSString).appendingPathComponent(".cs-launch")
+        let content = "#!/bin/zsh -l\nrm -f \(shellEscape(scriptPath))\nexec \(claudeCommand)\n"
+        guard (try? content.write(toFile: scriptPath, atomically: true, encoding: .utf8)) != nil,
+              (try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath)) != nil
+        else { return }
+
+        let ghosttyURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.mitchellh.ghostty")
+            ?? URL(fileURLWithPath: "/Applications/Ghostty.app")
+        NSWorkspace.shared.open(
+            [URL(fileURLWithPath: scriptPath)],
+            withApplicationAt: ghosttyURL,
+            configuration: NSWorkspace.OpenConfiguration()
+        )
     }
 
     // MARK: - iTerm2

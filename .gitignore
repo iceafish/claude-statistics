@@ -49,3 +49,4 @@ Podfile.lock
 *.orig
 xcuserdata/
 .worktrees/
+.cs-launch

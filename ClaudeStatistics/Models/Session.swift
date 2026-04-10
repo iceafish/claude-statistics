@@ -28,7 +28,7 @@ struct Session: Identifiable, Hashable {
     }
 }
 
-struct ModelTokenStats {
+struct ModelTokenStats: Codable {
     var inputTokens: Int = 0
     var outputTokens: Int = 0
     var cacheCreation5mTokens: Int = 0
@@ -44,36 +44,92 @@ struct ModelTokenStats {
     }
 }
 
-struct SessionStats {
+struct SessionStats: Codable {
+    // MARK: - Stored: session-level metadata
     var model: String = "Unknown"
-    var totalInputTokens: Int = 0
-    var totalOutputTokens: Int = 0
-    var cacheCreation5mTokens: Int = 0   // 5-min cache write (1.25x)
-    var cacheCreation1hTokens: Int = 0   // 1-hour cache write (2x)
-    var cacheCreationTotalTokens: Int = 0 // total cache_creation_input_tokens (fallback)
-    var cacheReadTokens: Int = 0          // cache hit (0.1x)
-    var messageCount: Int = 0
-    var userMessageCount: Int = 0
-    var assistantMessageCount: Int = 0
-    var toolUseCounts: [String: Int] = [:]
     var startTime: Date?
     var endTime: Date?
     var lastPrompt: String?
     var contextTokens: Int = 0          // last message's input context size (input + cache_read)
-    var modelBreakdown: [String: ModelTokenStats] = [:]
+    var userMessageCount: Int = 0
+    var assistantMessageCount: Int = 0
 
-    /// Context window size for the primary model
+    // MARK: - Stored: single source of truth for time-bucketed data
+    /// Per-5-minute token/cost data, keyed by 5-minute boundary in local timezone.
+    /// All other aggregations (hour, day, totals, modelBreakdown) are derived from this.
+    var fiveMinSlices: [Date: DaySlice] = [:]
+
+    // MARK: - Derived from fiveMinSlices
+
+    var totalInputTokens: Int { fiveMinSlices.values.reduce(0) { $0 + $1.totalInputTokens } }
+    var totalOutputTokens: Int { fiveMinSlices.values.reduce(0) { $0 + $1.totalOutputTokens } }
+    var cacheCreation5mTokens: Int { fiveMinSlices.values.reduce(0) { $0 + $1.cacheCreation5mTokens } }
+    var cacheCreation1hTokens: Int { fiveMinSlices.values.reduce(0) { $0 + $1.cacheCreation1hTokens } }
+    var cacheCreationTotalTokens: Int { fiveMinSlices.values.reduce(0) { $0 + $1.cacheCreationTotalTokens } }
+    var cacheReadTokens: Int { fiveMinSlices.values.reduce(0) { $0 + $1.cacheReadTokens } }
+    var messageCount: Int { fiveMinSlices.values.reduce(0) { $0 + $1.messageCount } }
+
+    var toolUseCounts: [String: Int] {
+        var merged: [String: Int] = [:]
+        for slice in fiveMinSlices.values {
+            for (tool, count) in slice.toolUseCounts {
+                merged[tool, default: 0] += count
+            }
+        }
+        return merged
+    }
+
+    var modelBreakdown: [String: ModelTokenStats] {
+        var merged: [String: ModelTokenStats] = [:]
+        for slice in fiveMinSlices.values {
+            for (model, mts) in slice.modelBreakdown {
+                var existing = merged[model, default: ModelTokenStats()]
+                existing.inputTokens += mts.inputTokens
+                existing.outputTokens += mts.outputTokens
+                existing.cacheCreation5mTokens += mts.cacheCreation5mTokens
+                existing.cacheCreation1hTokens += mts.cacheCreation1hTokens
+                existing.cacheCreationTotalTokens += mts.cacheCreationTotalTokens
+                existing.cacheReadTokens += mts.cacheReadTokens
+                existing.messageCount += mts.messageCount
+                merged[model] = existing
+            }
+        }
+        return merged
+    }
+
+    /// Per-hour data derived from fiveMinSlices, keyed by start of hour.
+    var hourSlices: [Date: DaySlice] {
+        let cal = Calendar.current
+        var buckets: [Date: DaySlice] = [:]
+        for (sliceStart, slice) in fiveMinSlices {
+            let comps = cal.dateComponents([.year, .month, .day, .hour], from: sliceStart)
+            let hourStart = cal.date(from: comps) ?? sliceStart
+            buckets[hourStart, default: DaySlice()].merge(slice)
+        }
+        return buckets
+    }
+
+    /// Per-day data derived from fiveMinSlices, keyed by startOfDay in local timezone.
+    var daySlices: [Date: DaySlice] {
+        let cal = Calendar.current
+        var buckets: [Date: DaySlice] = [:]
+        for (sliceStart, slice) in fiveMinSlices {
+            let dayStart = cal.startOfDay(for: sliceStart)
+            buckets[dayStart, default: DaySlice()].merge(slice)
+        }
+        return buckets
+    }
+
+    // MARK: - Convenience computed properties
+
     var contextWindowSize: Int {
         let m = model.lowercased()
-        // Claude Code uses extended thinking with 1M context for latest models
         if m.contains("opus-4-6") || m.contains("sonnet-4-6") || m.contains("opus-4-5") || m.contains("sonnet-4-5") {
             return 1_000_000
         }
-        // Older models or haiku use 200K
         return 200_000
     }
 
-    /// Context usage percentage (0-100), rounded to match Claude Code's Math.round()
     var contextUsagePercent: Double {
         guard contextWindowSize > 0, contextTokens > 0 else { return 0 }
         return min(100, (Double(contextTokens) / Double(contextWindowSize) * 100).rounded())
@@ -86,10 +142,8 @@ struct SessionStats {
             .map { (model: $0.key, stats: $0.value) }
     }
 
-    /// Converts per-model token data to [ModelUsage] for use with CostModelsCard
     var asModelUsages: [ModelUsage] {
         if modelBreakdown.isEmpty {
-            // Single-model fallback
             var u = ModelUsage(model: model)
             u.inputTokens = totalInputTokens
             u.outputTokens = totalOutputTokens
@@ -135,13 +189,48 @@ struct SessionStats {
         toolUseCounts.values.reduce(0, +)
     }
 
-    // MARK: - Per-day breakdown (for accurate daily statistics)
+    // MARK: - Codable (only stored fields)
+    enum CodingKeys: String, CodingKey {
+        case model, startTime, endTime, lastPrompt, contextTokens
+        case userMessageCount, assistantMessageCount, fiveMinSlices
+    }
 
-    /// Per-day token/cost data, keyed by startOfDay in local timezone.
-    /// Sessions spanning multiple days have tokens attributed to each day.
-    var daySlices: [Date: DaySlice] = [:]
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(model, forKey: .model)
+        try container.encodeIfPresent(startTime, forKey: .startTime)
+        try container.encodeIfPresent(endTime, forKey: .endTime)
+        try container.encodeIfPresent(lastPrompt, forKey: .lastPrompt)
+        try container.encode(contextTokens, forKey: .contextTokens)
+        try container.encode(userMessageCount, forKey: .userMessageCount)
+        try container.encode(assistantMessageCount, forKey: .assistantMessageCount)
+        let sliceStringKeyed = Dictionary(uniqueKeysWithValues:
+            fiveMinSlices.map { (String($0.key.timeIntervalSince1970), $0.value) }
+        )
+        try container.encode(sliceStringKeyed, forKey: .fiveMinSlices)
+    }
 
-    struct DaySlice {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        model = try container.decodeIfPresent(String.self, forKey: .model) ?? "Unknown"
+        startTime = try container.decodeIfPresent(Date.self, forKey: .startTime)
+        endTime = try container.decodeIfPresent(Date.self, forKey: .endTime)
+        lastPrompt = try container.decodeIfPresent(String.self, forKey: .lastPrompt)
+        contextTokens = try container.decodeIfPresent(Int.self, forKey: .contextTokens) ?? 0
+        userMessageCount = try container.decodeIfPresent(Int.self, forKey: .userMessageCount) ?? 0
+        assistantMessageCount = try container.decodeIfPresent(Int.self, forKey: .assistantMessageCount) ?? 0
+        let sliceStringKeyed = try container.decodeIfPresent([String: DaySlice].self, forKey: .fiveMinSlices) ?? [:]
+        fiveMinSlices = Dictionary(uniqueKeysWithValues:
+            sliceStringKeyed.compactMap { key, value -> (Date, DaySlice)? in
+                guard let ti = Double(key) else { return nil }
+                return (Date(timeIntervalSince1970: ti), value)
+            }
+        )
+    }
+
+    init() {}
+
+    struct DaySlice: Codable {
         var totalInputTokens: Int = 0
         var totalOutputTokens: Int = 0
         var cacheCreation5mTokens: Int = 0
@@ -171,6 +260,30 @@ struct SessionStats {
 
         var isCostEstimated: Bool {
             modelBreakdown.keys.contains { !ModelPricing.shared.isExactMatch(for: $0) }
+        }
+
+        mutating func merge(_ other: DaySlice) {
+            totalInputTokens += other.totalInputTokens
+            totalOutputTokens += other.totalOutputTokens
+            cacheCreation5mTokens += other.cacheCreation5mTokens
+            cacheCreation1hTokens += other.cacheCreation1hTokens
+            cacheCreationTotalTokens += other.cacheCreationTotalTokens
+            cacheReadTokens += other.cacheReadTokens
+            messageCount += other.messageCount
+            for (tool, count) in other.toolUseCounts {
+                toolUseCounts[tool, default: 0] += count
+            }
+            for (model, mts) in other.modelBreakdown {
+                var existing = modelBreakdown[model, default: ModelTokenStats()]
+                existing.inputTokens += mts.inputTokens
+                existing.outputTokens += mts.outputTokens
+                existing.cacheCreation5mTokens += mts.cacheCreation5mTokens
+                existing.cacheCreation1hTokens += mts.cacheCreation1hTokens
+                existing.cacheCreationTotalTokens += mts.cacheCreationTotalTokens
+                existing.cacheReadTokens += mts.cacheReadTokens
+                existing.messageCount += mts.messageCount
+                modelBreakdown[model] = existing
+            }
         }
     }
 
@@ -295,6 +408,12 @@ final class ModelPricing {
     /// Update a single model's pricing and persist
     func updateModel(id: String, pricing: Pricing) {
         models[id] = pricing
+        savePricing()
+    }
+
+    /// Remove a model and persist
+    func removeModel(id: String) {
+        models.removeValue(forKey: id)
         savePricing()
     }
 

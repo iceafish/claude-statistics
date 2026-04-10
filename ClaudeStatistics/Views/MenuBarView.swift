@@ -58,6 +58,7 @@ struct MenuBarView: View {
     @AppStorage("fontScale") private var fontScale = 1.0
     @AppStorage("zaiUsageEnabled") private var zaiUsageEnabled = false
     @AppStorage("openAIUsageEnabled") private var openAIUsageEnabled = false
+    @Namespace private var tabNamespace
 
     var body: some View {
         VStack(spacing: 0) {
@@ -68,10 +69,15 @@ struct MenuBarView: View {
                         title: tab.localizedName,
                         icon: tab.icon,
                         isSelected: selectedTab == tab,
-                        showBadge: tab == .settings && updaterService.hasUpdate
-                    ) {
-                        selectedTab = tab
-                    }
+                        showBadge: tab == .settings && updaterService.hasUpdate,
+                        fontScale: fontScale,
+                        action: {
+                            withAnimation(Theme.tabAnimation) {
+                                selectedTab = tab
+                            }
+                        },
+                        namespace: tabNamespace
+                    )
                 }
             }
             .padding(.horizontal, 8)
@@ -104,7 +110,7 @@ struct MenuBarView: View {
                                 ForEach(sections, id: \.rawValue) { section in
                                     switch section {
                                     case .claude:
-                                        UsageView(viewModel: usageViewModel)
+                                        UsageView(viewModel: usageViewModel, store: store)
                                             .padding(12)
                                     case .zai:
                                         ZaiUsageView(viewModel: zaiUsageViewModel)
@@ -135,9 +141,9 @@ struct MenuBarView: View {
                 }
                 .frame(width: geo.size.width / fontScale, height: geo.size.height / fontScale, alignment: .topLeading)
                 .scaleEffect(fontScale, anchor: .topLeading)
+                .transition(.opacity.animation(Theme.quickSpring))
             }
-
-            Divider()
+            .id(selectedTab)
 
             // Footer
             HStack {
@@ -145,31 +151,48 @@ struct MenuBarView: View {
                     NSApplication.shared.terminate(nil)
                 }
                 .buttonStyle(.plain)
-                .font(.caption)
+                .font(.system(size: 11 * fontScale))
                 .foregroundStyle(.secondary)
 
-                Spacer()
+                if let progress = store.parseProgress {
+                    Spacer()
+                    HStack(spacing: 4) {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                            .frame(width: 10, height: 10)
+                        Text(progress)
+                            .font(.system(size: 10 * fontScale))
+                            .foregroundStyle(.secondary)
+                    }
+                    .transition(.opacity)
+                    Spacer()
+                } else {
+                    Spacer()
+                }
 
                 Text("app.name")
-                    .font(.caption2)
+                    .font(.system(size: 10 * fontScale))
                     .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
+            .background(.ultraThinMaterial)
+            .animation(.easeInOut(duration: 0.3), value: store.parseProgress)
         }
-        .frame(width: 480, height: 520)
-        .onAppear {
-            usageViewModel.loadCache()
-            store.popoverDidOpen()
-        }
-        .onDisappear {
-            store.popoverDidClose()
-        }
+        .frame(minWidth: 480, maxWidth: 800, minHeight: 520, maxHeight: 900)
     }
 
     @ViewBuilder
     private var sessionContent: some View {
-        if let session = sessionViewModel.selectedSession {
+        if let session = sessionViewModel.selectedSession, sessionViewModel.showTranscript {
+            TranscriptView(
+                session: session,
+                initialSearchQuery: sessionViewModel.transcriptSearchQuery,
+                initialSnippetContext: sessionViewModel.transcriptSnippetContext,
+                onBack: { sessionViewModel.closeTranscript() },
+                viewModel: sessionViewModel
+            )
+        } else if let session = sessionViewModel.selectedSession {
             SessionDetailView(
                 session: session,
                 topic: store.quickStats[session.id]?.topic,
@@ -181,7 +204,8 @@ struct MenuBarView: View {
                     sessionViewModel.deleteSession(session)
                     sessionViewModel.selectedSession = nil
                     sessionViewModel.selectedSessionStats = nil
-                }
+                },
+                onViewTranscript: { sessionViewModel.openTranscript(for: session) }
             )
         } else {
             SessionListView(viewModel: sessionViewModel, store: store)
@@ -194,15 +218,22 @@ struct TabButton: View {
     let icon: String
     let isSelected: Bool
     var showBadge: Bool = false
+    var fontScale: Double = 1.0
     let action: () -> Void
+    let namespace: Namespace.ID
     @State private var isHovered = false
+    @State private var bounceCount = 0
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 2) {
+            VStack(spacing: 4) {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: icon)
-                        .font(.system(size: 14))
+                        .font(.system(size: 14 * fontScale))
+                        .symbolEffect(.bounce, value: bounceCount)
+                        .onChange(of: isSelected) { _, newValue in
+                            if newValue { bounceCount += 1 }
+                        }
                     if showBadge {
                         Circle()
                             .fill(.red)
@@ -211,16 +242,57 @@ struct TabButton: View {
                     }
                 }
                 Text(title)
-                    .font(.system(size: 10))
+                    .font(.system(size: 10 * fontScale, weight: isSelected ? .medium : .regular))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .contentShape(Rectangle())
             .foregroundStyle(isSelected ? .primary : isHovered ? .primary : .secondary)
-            .background(isSelected ? Color.blue.opacity(0.1) : isHovered ? Color.gray.opacity(0.1) : Color.clear)
-            .cornerRadius(6)
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+        .overlay(alignment: .bottom) {
+            if isSelected {
+                Capsule()
+                    .fill(Color.accentColor)
+                    .frame(width: 24, height: 2.5)
+                    .matchedGeometryEffect(id: "tab_indicator", in: namespace)
+            }
+        }
+    }
+}
+
+/// Wrapper that reactively applies locale from @AppStorage.
+struct PanelContentView: View {
+    @AppStorage("appLanguage") private var appLanguage = "auto"
+    @ObservedObject var usageViewModel: UsageViewModel
+    @ObservedObject var profileViewModel: ProfileViewModel
+    @ObservedObject var sessionViewModel: SessionViewModel
+    @ObservedObject var store: SessionDataStore
+    @ObservedObject var updaterService: UpdaterService
+    @ObservedObject var notificationService: UsageResetNotificationService
+    @ObservedObject var zaiUsageViewModel: ZaiUsageViewModel
+    @ObservedObject var openAIUsageViewModel: OpenAIUsageViewModel
+
+    private var currentLocale: Locale {
+        switch appLanguage {
+        case "en": Locale(identifier: "en")
+        case "zh-Hans": Locale(identifier: "zh-Hans")
+        default: Locale.current
+        }
+    }
+
+    var body: some View {
+        MenuBarView(
+            usageViewModel: usageViewModel,
+            profileViewModel: profileViewModel,
+            sessionViewModel: sessionViewModel,
+            store: store,
+            updaterService: updaterService,
+            notificationService: notificationService,
+            zaiUsageViewModel: zaiUsageViewModel,
+            openAIUsageViewModel: openAIUsageViewModel
+        )
+        .environment(\.locale, currentLocale)
     }
 }

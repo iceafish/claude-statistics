@@ -2,7 +2,7 @@ import Foundation
 
 /// Manages a repeating auto-refresh loop using a detached Task.
 /// The caller supplies a closure to run on each tick.
-final class AutoRefreshCoordinator: @unchecked Sendable {
+final class AutoRefreshCoordinator {
     private var refreshTask: Task<Void, Never>?
     private var activeInterval: TimeInterval = 0
     private let action: @Sendable () async -> Void
