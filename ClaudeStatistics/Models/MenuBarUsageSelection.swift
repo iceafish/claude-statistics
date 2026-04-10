@@ -29,6 +29,11 @@ struct MenuBarUsageTextFragment: Equatable {
     let style: MenuBarUsageTextStyle
 }
 
+enum MenuBarUsageDisplayMode: Equatable {
+    case logo
+    case usage([MenuBarUsageItem])
+}
+
 enum MenuBarUsageSelection {
     static let compactProviderFontSize = 11.0
     static let compactPercentFontSize = 10.0
@@ -78,6 +83,10 @@ enum MenuBarUsageSelection {
         return items
             .flatMap { [$0.providerLabel, $0.percentText] }
             .joined(separator: " ")
+    }
+
+    static func displayMode(for items: [MenuBarUsageItem]) -> MenuBarUsageDisplayMode {
+        items.isEmpty ? .logo : .usage(items)
     }
 
     static func styledFragments(from items: [MenuBarUsageItem]) -> [MenuBarUsageTextFragment] {

@@ -25,11 +25,9 @@ final class StatusBarController: NSObject, ObservableObject {
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = NSImage(named: "MenuBarIcon")
-            button.image?.isTemplate = true
-            button.imagePosition = .imageLeading
-            button.title = "--"
-            button.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
+            button.imagePosition = .imageOnly
+            button.title = ""
+            button.attributedTitle = NSAttributedString(string: "")
             button.target = self
             button.action = #selector(togglePanel)
         }
@@ -59,7 +57,21 @@ final class StatusBarController: NSObject, ObservableObject {
     }
 
     private func refreshStatusItemLabel() {
-        statusItem.button?.title = MenuBarUsageSelection.compactText(from: menuBarItems) ?? "--"
+        guard let button = statusItem.button else { return }
+
+        switch MenuBarUsageSelection.displayMode(for: menuBarItems) {
+        case .logo:
+            button.image = NSImage(named: "MenuBarIcon")
+            button.image?.isTemplate = true
+            button.title = ""
+            button.attributedTitle = NSAttributedString(string: "")
+        case let .usage(items):
+            let image = statusImage(for: items)
+            button.image = image
+            button.image?.isTemplate = false
+            button.title = ""
+            button.attributedTitle = NSAttributedString(string: "")
+        }
     }
 
     private var menuBarItems: [MenuBarUsageItem] {
@@ -70,6 +82,67 @@ final class StatusBarController: NSObject, ObservableObject {
             zaiEnabled: UserDefaults.standard.bool(forKey: "zaiUsageEnabled"),
             openAIEnabled: UserDefaults.standard.bool(forKey: "openAIUsageEnabled")
         )
+    }
+
+    private func statusImage(for items: [MenuBarUsageItem]) -> NSImage {
+        let attributedString = NSMutableAttributedString()
+
+        for fragment in MenuBarUsageSelection.styledFragments(from: items) {
+            attributedString.append(
+                NSAttributedString(
+                    string: fragment.text,
+                    attributes: attributes(for: fragment.style)
+                )
+            )
+        }
+
+        let measuredSize = attributedString.size()
+        let imageSize = NSSize(
+            width: ceil(measuredSize.width),
+            height: max(14, ceil(measuredSize.height))
+        )
+        let image = NSImage(size: imageSize)
+        image.lockFocus()
+        attributedString.draw(
+            at: NSPoint(
+                x: 0,
+                y: floor((imageSize.height - measuredSize.height) / 2)
+            )
+        )
+        image.unlockFocus()
+        image.isTemplate = false
+        return image
+    }
+
+    private func attributes(for style: MenuBarUsageTextStyle) -> [NSAttributedString.Key: Any] {
+        switch style {
+        case .providerLabel:
+            return [
+                .font: NSFont.systemFont(ofSize: MenuBarUsageSelection.compactProviderFontSize, weight: .semibold),
+                .foregroundColor: NSColor.white
+            ]
+        case .separator:
+            return [
+                .font: NSFont.systemFont(ofSize: MenuBarUsageSelection.compactProviderFontSize, weight: .regular),
+                .foregroundColor: NSColor.white
+            ]
+        case let .percentage(role):
+            return [
+                .font: NSFont.monospacedDigitSystemFont(ofSize: MenuBarUsageSelection.compactPercentFontSize, weight: .bold),
+                .foregroundColor: color(for: role)
+            ]
+        }
+    }
+
+    private func color(for role: MenuBarUsageColorRole) -> NSColor {
+        switch role {
+        case .green:
+            return .systemGreen
+        case .yellow:
+            return .systemYellow
+        case .critical:
+            return .systemRed
+        }
     }
 
     // MARK: - Panel

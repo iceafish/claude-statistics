@@ -135,6 +135,10 @@ func runMenuBarUsageSelectionTests() {
         MenuBarUsageSelection.compactText(from: emptyItems) == nil,
         "Expected compact menu bar text to be hidden when both providers are invalid"
     )
+    expect(
+        MenuBarUsageSelection.displayMode(for: emptyItems) == .logo,
+        "Expected the menu bar to fall back to the logo when no provider has displayable usage"
+    )
 
     let claudeOnlyItems = MenuBarUsageSelection.items(
         claudeFiveHourPercent: 42.9,
@@ -218,6 +222,10 @@ func runMenuBarUsageSelectionTests() {
     expect(
         MenuBarUsageSelection.compactText(from: compactItems) == "C 42% Z 64% O 31%",
         "Expected compact menu text to flatten provider labels and percentages"
+    )
+    expect(
+        MenuBarUsageSelection.displayMode(for: compactItems) == .usage(compactItems),
+        "Expected the menu bar to prefer compact usage text when providers have displayable usage"
     )
     let compactFragments = MenuBarUsageSelection.styledFragments(from: compactItems)
     expect(
