@@ -65,6 +65,7 @@ struct MenuBarView: View {
                         icon: tab.icon,
                         isSelected: selectedTab == tab,
                         showBadge: tab == .settings && updaterService.hasUpdate,
+                        fontScale: fontScale,
                         action: {
                             withAnimation(Theme.tabAnimation) {
                                 selectedTab = tab
@@ -109,18 +110,33 @@ struct MenuBarView: View {
                     NSApplication.shared.terminate(nil)
                 }
                 .buttonStyle(.plain)
-                .font(.caption)
+                .font(.system(size: 11 * fontScale))
                 .foregroundStyle(.secondary)
 
-                Spacer()
+                if let progress = store.parseProgress {
+                    Spacer()
+                    HStack(spacing: 4) {
+                        ProgressView()
+                            .scaleEffect(0.5)
+                            .frame(width: 10, height: 10)
+                        Text(progress)
+                            .font(.system(size: 10 * fontScale))
+                            .foregroundStyle(.secondary)
+                    }
+                    .transition(.opacity)
+                    Spacer()
+                } else {
+                    Spacer()
+                }
 
                 Text("app.name")
-                    .font(.caption2)
+                    .font(.system(size: 10 * fontScale))
                     .foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(.ultraThinMaterial)
+            .animation(.easeInOut(duration: 0.3), value: store.parseProgress)
         }
         .frame(minWidth: 480, maxWidth: 800, minHeight: 520, maxHeight: 900)
     }
@@ -161,6 +177,7 @@ struct TabButton: View {
     let icon: String
     let isSelected: Bool
     var showBadge: Bool = false
+    var fontScale: Double = 1.0
     let action: () -> Void
     let namespace: Namespace.ID
     @State private var isHovered = false
@@ -171,7 +188,7 @@ struct TabButton: View {
             VStack(spacing: 4) {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: icon)
-                        .font(.system(size: 14))
+                        .font(.system(size: 14 * fontScale))
                         .symbolEffect(.bounce, value: bounceCount)
                         .onChange(of: isSelected) { _, newValue in
                             if newValue { bounceCount += 1 }
@@ -184,7 +201,7 @@ struct TabButton: View {
                     }
                 }
                 Text(title)
-                    .font(.system(size: 10, weight: isSelected ? .medium : .regular))
+                    .font(.system(size: 10 * fontScale, weight: isSelected ? .medium : .regular))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)

@@ -205,7 +205,14 @@ final class SessionDataStore: ObservableObject {
             let dirtySessions = scannedSessions.filter { ids.contains($0.id) }
 
             // Quick-parse + full-parse + index changed sessions
-            for session in dirtySessions {
+            let total = dirtySessions.count
+            let showProgress = total > 3
+
+            if showProgress {
+                await MainActor.run { self.parseProgress = "Updating..." }
+            }
+
+            for (i, session) in dirtySessions.enumerated() {
                 let quick = TranscriptParser.shared.parseSessionQuick(at: session.filePath)
                 db.saveQuickStats(sessionId: session.id, fileSize: session.fileSize, mtime: session.lastModified, stats: quick)
                 await MainActor.run { self.quickStats[session.id] = quick }
@@ -213,7 +220,16 @@ final class SessionDataStore: ObservableObject {
                 let stats = TranscriptParser.shared.parseSession(at: session.filePath)
                 db.saveSessionStats(sessionId: session.id, stats: stats)
                 db.indexSession(sessionId: session.id, filePath: session.filePath)
-                await MainActor.run { self.parsedStats[session.id] = stats }
+                await MainActor.run {
+                    self.parsedStats[session.id] = stats
+                    if showProgress {
+                        self.parseProgress = "Updating \(i + 1)/\(total)..."
+                    }
+                }
+            }
+
+            if showProgress {
+                await MainActor.run { self.parseProgress = nil }
             }
 
             await MainActor.run { self.rebucket() }
@@ -404,7 +420,7 @@ final class SessionDataStore: ObservableObject {
     }
 
     /// Aggregate raw token/cost usage for a rolling time window.
-    func aggregateWindowTrendData(from start: Date, to end: Date, granularity: TrendGranularity, cumulative: Bool = false) -> [TrendDataPoint] {
+    func aggregateWindowTrendData(from start: Date, to end: Date, granularity: TrendGranularity, cumulative: Bool = false, modelFilter: ((String) -> Bool)? = nil) -> [TrendDataPoint] {
         guard start < end else { return [] }
 
         let cal = Calendar.current
@@ -420,8 +436,24 @@ final class SessionDataStore: ObservableObject {
 
                 let bucket = granularity.bucketStart(for: sliceTime)
                 var existing = buckets[bucket, default: (tokens: 0, cost: 0)]
-                existing.tokens += slice.totalTokens
-                existing.cost += slice.estimatedCost
+
+                if let filter = modelFilter {
+                    for (model, modelStats) in slice.modelBreakdown where filter(model) {
+                        existing.tokens += modelStats.totalTokens
+                        existing.cost += ModelPricing.estimateCost(
+                            model: model,
+                            inputTokens: modelStats.inputTokens,
+                            outputTokens: modelStats.outputTokens,
+                            cacheCreation5mTokens: modelStats.cacheCreation5mTokens,
+                            cacheCreation1hTokens: modelStats.cacheCreation1hTokens,
+                            cacheCreationTotalTokens: modelStats.cacheCreationTotalTokens,
+                            cacheReadTokens: modelStats.cacheReadTokens
+                        )
+                    }
+                } else {
+                    existing.tokens += slice.totalTokens
+                    existing.cost += slice.estimatedCost
+                }
                 buckets[bucket] = existing
             }
         }
@@ -461,6 +493,43 @@ final class SessionDataStore: ObservableObject {
         }
 
         return result
+    }
+
+    func windowModelBreakdown(from start: Date, to end: Date, modelFilter: ((String) -> Bool)? = nil) -> [ModelUsage] {
+        guard start < end else { return [] }
+
+        let useFineSlices = true // always use fine slices for window queries
+        let sliceDuration: TimeInterval = 5 * 60
+        var combined: [String: ModelUsage] = [:]
+
+        for stats in parsedStats.values {
+            let slices: [Date: SessionStats.DaySlice] = useFineSlices ? stats.fiveMinSlices : stats.daySlices
+            for (sliceTime, slice) in slices {
+                let sliceEnd = sliceTime.addingTimeInterval(sliceDuration)
+                guard sliceEnd > start, sliceTime < end else { continue }
+
+                for (model, modelStats) in slice.modelBreakdown {
+                    if let filter = modelFilter, !filter(model) { continue }
+                    var existing = combined[model] ?? ModelUsage(model: model)
+                    existing.inputTokens += modelStats.inputTokens
+                    existing.outputTokens += modelStats.outputTokens
+                    existing.cacheCreationTotalTokens += modelStats.cacheCreationTotalTokens
+                    existing.cacheReadTokens += modelStats.cacheReadTokens
+                    existing.cost += ModelPricing.estimateCost(
+                        model: model,
+                        inputTokens: modelStats.inputTokens,
+                        outputTokens: modelStats.outputTokens,
+                        cacheCreation5mTokens: modelStats.cacheCreation5mTokens,
+                        cacheCreation1hTokens: modelStats.cacheCreation1hTokens,
+                        cacheCreationTotalTokens: modelStats.cacheCreationTotalTokens,
+                        cacheReadTokens: modelStats.cacheReadTokens
+                    )
+                    existing.messageCount += modelStats.messageCount
+                    combined[model] = existing
+                }
+            }
+        }
+        return combined.values.sorted { $0.totalTokens > $1.totalTokens }
     }
 
     var globalModelBreakdown: [ModelUsage] {

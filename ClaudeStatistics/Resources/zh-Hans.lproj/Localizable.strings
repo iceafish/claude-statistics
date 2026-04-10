@@ -113,6 +113,8 @@
 "settings.autoRefreshHint" = "用量接口容易限流，建议适当调大刷新间隔";
 "settings.fontSize" = "字体大小";
 "settings.general" = "通用";
+"settings.appearance" = "外观";
+"settings.customize" = "自定义";
 "settings.launchAtLogin" = "开机自动启动";
 "settings.terminal" = "终端";
 "settings.resumeIn" = "恢复终端";
@@ -133,6 +135,7 @@
 "settings.organization" = "组织";
 "settings.loading" = "加载中...";
 "settings.tabOrder" = "标签排序";
+"settings.tabOrderHint" = "点击标签后用箭头调整顺序";
 "settings.resetDefault" = "恢复默认";
 "settings.statusLine" = "状态行";
 "settings.diagnostics" = "诊断";
@@ -148,10 +151,12 @@
 "pricing.model" = "模型";
 "pricing.input" = "输入";
 "pricing.output" = "输出";
-"pricing.5mW" = "5m 写";
-"pricing.1hW" = "1h 写";
-"pricing.read" = "读取";
+"pricing.5mW" = "CW(5m)";
+"pricing.1hW" = "CW(1h)";
+"pricing.read" = "CRead";
 "pricing.save" = "保存";
+"pricing.add" = "添加";
+"pricing.modelId" = "模型 ID（如 gpt-4o）";
 "pricing.updated %lld" = "已从 Anthropic 文档更新 %lld 个模型";
 
 /* Status Line */

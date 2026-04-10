@@ -202,7 +202,7 @@ struct UsageTrendChartView: View {
     @ViewBuilder
     private func chartTooltip(date: Date, tokens: Int, cost: Double) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(formatXAxisLabel(date))
+            Text(formatTooltipDate(date))
                 .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(.secondary)
             if maxTokens > 0 {
@@ -263,6 +263,13 @@ struct UsageTrendChartView: View {
 
         values.append(windowEnd)
         return values
+    }
+
+    private func formatTooltipDate(_ date: Date) -> String {
+        if granularity == .fiveMinute {
+            return DateFormatter.with("HH:mm").string(from: date)
+        }
+        return DateFormatter.with("MM/dd HH:mm").string(from: date)
     }
 
     private func formatXAxisLabel(_ date: Date) -> String {

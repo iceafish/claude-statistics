@@ -411,6 +411,12 @@ final class ModelPricing {
         savePricing()
     }
 
+    /// Remove a model and persist
+    func removeModel(id: String) {
+        models.removeValue(forKey: id)
+        savePricing()
+    }
+
     /// Reload pricing from disk
     func reload() {
         loadPricing()

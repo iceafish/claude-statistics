@@ -113,6 +113,8 @@
 "settings.autoRefreshHint" = "The usage API is rate-limited. A longer interval is recommended to avoid errors.";
 "settings.fontSize" = "Font Size";
 "settings.general" = "General";
+"settings.appearance" = "Appearance";
+"settings.customize" = "Customize";
 "settings.launchAtLogin" = "Launch at login";
 "settings.terminal" = "Terminal";
 "settings.resumeIn" = "Resume in";
@@ -133,6 +135,7 @@
 "settings.organization" = "Organization";
 "settings.loading" = "Loading...";
 "settings.tabOrder" = "Tab Order";
+"settings.tabOrderHint" = "Tap a tab then use arrows to reorder";
 "settings.resetDefault" = "Reset to Default";
 "settings.statusLine" = "Status Line";
 "settings.diagnostics" = "Diagnostics";
@@ -148,10 +151,12 @@
 "pricing.model" = "Model";
 "pricing.input" = "Input";
 "pricing.output" = "Output";
-"pricing.5mW" = "5m W";
-"pricing.1hW" = "1h W";
-"pricing.read" = "Read";
+"pricing.5mW" = "CW(5m)";
+"pricing.1hW" = "CW(1h)";
+"pricing.read" = "CRead";
 "pricing.save" = "Save";
+"pricing.add" = "Add";
+"pricing.modelId" = "Model ID (e.g. gpt-4o)";
 "pricing.updated %lld" = "Updated %lld models from Anthropic docs";
 
 /* Status Line */

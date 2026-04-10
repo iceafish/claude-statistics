@@ -3,7 +3,7 @@ import SwiftUI
 struct UsageView: View {
     @ObservedObject var viewModel: UsageViewModel
     @ObservedObject var store: SessionDataStore
-    @State private var selectedWindowTab = 0  // 0 = 5h, 1 = 7d
+    @State private var selectedWindowTab = "5h"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -87,22 +87,24 @@ struct UsageView: View {
                 Divider()
 
                 Picker("", selection: $selectedWindowTab) {
-                    Text("5h").tag(0)
-                    Text("7d").tag(1)
+                    Text("5h").tag("5h")
+                    Text("7d").tag("7d")
+                    if usage.sevenDaySonnet != nil {
+                        Text("7d Sonnet").tag("7d_sonnet")
+                    }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
 
-                if selectedWindowTab == 0 {
-                    if let info = windowTrendInfo(for: usage.fiveHour, durationValue: -5, durationComponent: .hour, granularity: .fiveMinute) {
-                        windowTimeRange(info)
-                        UsageTrendChartView(dataPoints: info.dataPoints, granularity: info.granularity, windowStart: info.windowStart, windowEnd: info.windowEnd)
-                    }
-                } else {
-                    if let info = windowTrendInfo(for: usage.sevenDay, durationValue: -7, durationComponent: .day, granularity: .hour) {
-                        windowTimeRange(info)
-                        UsageTrendChartView(dataPoints: info.dataPoints, granularity: info.granularity, windowStart: info.windowStart, windowEnd: info.windowEnd)
-                    }
+                switch selectedWindowTab {
+                case "5h":
+                    windowChart(for: usage.fiveHour, durationValue: -5, durationComponent: .hour, granularity: .fiveMinute, modelFilter: isClaude)
+                case "7d":
+                    windowChart(for: usage.sevenDay, durationValue: -7, durationComponent: .day, granularity: .hour, modelFilter: isClaudeNonSonnet)
+                case "7d_sonnet":
+                    windowChart(for: usage.sevenDaySonnet, durationValue: -7, durationComponent: .day, granularity: .hour, modelFilter: isSonnet)
+                default:
+                    EmptyView()
                 }
             } else if !viewModel.isLoading {
                 // No data — show error or empty state with retry action
@@ -146,13 +148,15 @@ extension UsageView {
         let granularity: TrendGranularity
         let windowStart: Date
         let windowEnd: Date
+        let modelBreakdown: [ModelUsage]
     }
 
     private func windowTrendInfo(
         for window: UsageWindow?,
         durationValue: Int,
         durationComponent: Calendar.Component,
-        granularity: TrendGranularity
+        granularity: TrendGranularity,
+        modelFilter: ((String) -> Bool)? = nil
     ) -> WindowTrendInfo? {
         guard store.isFullParseComplete,
               let window,
@@ -164,13 +168,134 @@ extension UsageView {
         let snapshotTime = min(viewModel.lastFetchedAt ?? Date(), resetAt)
         guard start < snapshotTime else { return nil }
 
-        let data = store.aggregateWindowTrendData(from: start, to: snapshotTime, granularity: granularity, cumulative: true)
+        let data = store.aggregateWindowTrendData(from: start, to: snapshotTime, granularity: granularity, cumulative: true, modelFilter: modelFilter)
+        let models = store.windowModelBreakdown(from: start, to: snapshotTime, modelFilter: modelFilter)
         return data.isEmpty ? nil : WindowTrendInfo(
             dataPoints: data,
             granularity: granularity,
             windowStart: start,
-            windowEnd: resetAt
+            windowEnd: resetAt,
+            modelBreakdown: models
         )
+    }
+
+    // MARK: - Model Filters
+
+    private func isClaude(_ model: String) -> Bool {
+        model.lowercased().contains("claude")
+    }
+
+    private func isSonnet(_ model: String) -> Bool {
+        model.lowercased().contains("sonnet")
+    }
+
+    private func isClaudeNonSonnet(_ model: String) -> Bool {
+        let lower = model.lowercased()
+        return lower.contains("claude") && !lower.contains("sonnet")
+    }
+
+    @ViewBuilder
+    private func windowChart(
+        for window: UsageWindow?,
+        durationValue: Int,
+        durationComponent: Calendar.Component,
+        granularity: TrendGranularity,
+        modelFilter: ((String) -> Bool)?
+    ) -> some View {
+        if let info = windowTrendInfo(for: window, durationValue: durationValue, durationComponent: durationComponent, granularity: granularity, modelFilter: modelFilter) {
+            windowTimeRange(info)
+            UsageTrendChartView(dataPoints: info.dataPoints, granularity: info.granularity, windowStart: info.windowStart, windowEnd: info.windowEnd)
+            if !info.modelBreakdown.isEmpty {
+                windowModelBreakdownView(info.modelBreakdown)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func windowModelBreakdownView(_ models: [ModelUsage]) -> some View {
+        let totalTokens = models.reduce(0) { $0 + $1.totalTokens }
+        let totalCost = models.reduce(0.0) { $0 + $1.cost }
+
+        VStack(alignment: .leading, spacing: 5) {
+            // Summary line
+            HStack {
+                HStack(spacing: 3) {
+                    Text("Tokens")
+                        .foregroundStyle(.tertiary)
+                    Text(abbreviateNumber(totalTokens))
+                        .foregroundStyle(.blue)
+                }
+                Spacer()
+                HStack(spacing: 3) {
+                    Text("Cost")
+                        .foregroundStyle(.tertiary)
+                    Text(abbreviateCost(totalCost))
+                        .foregroundStyle(.orange)
+                }
+            }
+            .font(.caption)
+
+            // Stacked bar
+            if totalTokens > 0 {
+                Canvas { ctx, size in
+                    var x: CGFloat = 0
+                    for model in models {
+                        let fraction = CGFloat(model.totalTokens) / CGFloat(totalTokens)
+                        let w = size.width * fraction
+                        ctx.fill(Path(CGRect(x: x, y: 0, width: w, height: size.height)),
+                                 with: .color(modelColor(model.model)))
+                        x += w
+                    }
+                }
+                .frame(height: 6)
+                .clipShape(Capsule())
+            }
+
+            // Inline legend
+            HStack(spacing: 10) {
+                ForEach(models) { model in
+                    let pct = totalTokens > 0 ? Double(model.totalTokens) / Double(totalTokens) * 100 : 0
+                    HStack(spacing: 3) {
+                        Circle().fill(modelColor(model.model)).frame(width: 6, height: 6)
+                        Text(shortModelName(model.model))
+                            .font(.caption2)
+                        Text("\(abbreviateNumber(model.totalTokens)) (\(String(format: "%.0f", pct))%)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    private func modelColor(_ model: String) -> Color {
+        let lower = model.lowercased()
+        if lower.contains("opus") { return .purple }
+        if lower.contains("sonnet") { return .blue }
+        if lower.contains("haiku") { return .green }
+        return .gray
+    }
+
+    private func shortModelName(_ model: String) -> String {
+        let lower = model.lowercased()
+        if lower.contains("opus") { return "Opus" }
+        if lower.contains("sonnet") { return "Sonnet" }
+        if lower.contains("haiku") { return "Haiku" }
+        return model
+    }
+
+    private func abbreviateNumber(_ n: Int) -> String {
+        if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
+        if n >= 1_000 { return String(format: "%.1fK", Double(n) / 1_000) }
+        return "\(n)"
+    }
+
+    private func abbreviateCost(_ cost: Double) -> String {
+        if cost >= 1.0 { return String(format: "$%.2f", cost) }
+        if cost >= 0.01 { return String(format: "$%.3f", cost) }
+        return String(format: "$%.4f", cost)
     }
 
     private func windowTimeRange(_ info: WindowTrendInfo) -> some View {
